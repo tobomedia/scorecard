@@ -215,3 +215,5 @@ dialog .prompt-actions button { min-height: 72px; font-size: 1.2rem; }
   min-height: 56px;
   box-shadow: 0 6px 20px #0008;
 }
+
+.app-version { margin-top: auto; padding-top: 8px; text-align: center; font-size: .75rem; color: var(--muted); opacity: .7; }

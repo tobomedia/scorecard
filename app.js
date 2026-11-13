@@ -157,7 +157,7 @@ function render() {
   const [name, ...args] = route();
   const view = views[name] || viewHome;
   const app = $('#app');
-  app.innerHTML = view(...args);
+  app.innerHTML = view(...args) + `<footer class="app-version">Version ${esc(APP_VERSION)}</footer>`;
   window.scrollTo(0, 0);
   if (view.after) view.after(...args);
   setWakeLock(name === 'live' && !!getLive());
@@ -179,9 +179,8 @@ function viewHome() {
     <button class="btn-big btn-block" data-go="history">History</button>
     <button class="btn-big btn-block" data-go="settings">Settings</button>
     <div class="spacer"></div>
-    <p class="muted" style="text-align:center;font-size:.85rem">Add to your home screen to use offline.<br><span id="app-version"></span></p>`;
+    <p class="muted" style="text-align:center;font-size:.85rem">Add to your home screen to use offline.</p>`;
 }
-viewHome.after = () => showVersion();
 
 function viewNew() {
   if (getLive()) {
@@ -652,9 +651,5 @@ function showUpdateBar() {
 }
 
 // Version is stamped into index.html at deploy time (see scripts/build.mjs).
-function showVersion() {
-  const el = $('#app-version');
-  const v = document.querySelector('meta[name=app-version]')?.content;
-  if (el && v) el.textContent = 'Version ' + v;
-}
+const APP_VERSION = document.querySelector('meta[name=app-version]')?.content || 'dev';
 if (!location.hash && getLive()) go('live'); else render();
