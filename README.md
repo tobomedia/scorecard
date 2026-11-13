@@ -14,14 +14,25 @@ Then open http://localhost:8000.
 
 ## Deploy (GitHub Pages)
 
-Repo **Settings → Pages → Build and deployment → Deploy from a branch**, then pick the branch and the `/ (root)` folder.
+Every push to `main` runs `.github/workflows/deploy.yml`, which builds and publishes the site.
+Repo **Settings → Pages → Source** must be set to **GitHub Actions**.
 
-## Updating
+The build (`scripts/build.mjs`):
+- renames `app.js` and `styles.css` to content-hashed names (e.g. `app.3f9a1c2b.js`)
+- rewrites `index.html` and `sw.js` to use them
+- stamps a version into the service worker cache name and the home screen label
 
-When you change any app file, bump `VERSION` in `sw.js`. Installed phones check for updates each time the app opens or comes back to the foreground, then show a "tap to update" bar.
+You never bump versions by hand. Installed phones check for updates each time the app opens or comes back to the foreground, then show a "tap to update" bar.
+
+To try a production build locally:
+
+```bash
+node scripts/build.mjs && cd _site && python3 -m http.server 8000
+```
 
 ## Files
 
 - `index.html`, `styles.css`, `app.js`: the app (plain JS, no build step)
 - `sw.js`, `manifest.webmanifest`, `icons/`: offline support and install
+- `scripts/build.mjs`, `.github/workflows/deploy.yml`: deploy build
 - All data lives in the phone's `localStorage`

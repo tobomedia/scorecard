@@ -1,5 +1,6 @@
-// Bump VERSION whenever app files change so phones pick up the update.
-const VERSION = 'scorecard-v3';
+// VERSION and the hashed file names below are stamped at deploy time by scripts/build.mjs.
+// Don't edit them by hand.
+const VERSION = 'scorecard-dev';
 const ASSETS = [
   './',
   'index.html',

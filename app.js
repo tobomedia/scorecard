@@ -651,12 +651,10 @@ function showUpdateBar() {
   document.body.appendChild(bar);
 }
 
-async function showVersion() {
+// Version is stamped into index.html at deploy time (see scripts/build.mjs).
+function showVersion() {
   const el = $('#app-version');
-  if (!el || !('caches' in window)) return;
-  try {
-    const v = (await caches.keys()).filter((k) => k.startsWith('scorecard-')).sort().pop();
-    if (v) el.textContent = v.replace('scorecard-', 'Version ');
-  } catch {}
+  const v = document.querySelector('meta[name=app-version]')?.content;
+  if (el && v) el.textContent = 'Version ' + v;
 }
 if (!location.hash && getLive()) go('live'); else render();
