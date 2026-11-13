@@ -175,6 +175,20 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') setWakeLock(!!getLive());
 });
 
+/* ---------- full screen ----------
+   Android Chrome can hide the status and navigation bars. iPhone ignores this (no API);
+   there the home-screen app is as full screen as it gets. Must be called from a tap. */
+function enterFullscreen() {
+  const el = document.documentElement;
+  if (document.fullscreenElement || !el.requestFullscreen) return;
+  el.requestFullscreen({ navigationUI: 'hide' })
+    .then(() => screen.orientation?.lock?.('portrait'))
+    .catch(() => { /* not allowed here; carry on */ });
+}
+function exitFullscreen() {
+  if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+}
+
 /* ---------- modal ---------- */
 const modal = $('#modal');
 function openModal(html, onClose) {
@@ -226,7 +240,7 @@ function viewHome() {
   return `
     <div class="logo-bar"><h1 class="logo"><img src="assets/brand/logo.webp" alt="Scorecard" width="900" height="516"></h1></div>
     ${live ? `
-      <button class="card resume-card stack btn-block" data-go="live" style="text-align:left;align-items:stretch;min-height:auto;padding:16px">
+      <button class="card resume-card stack btn-block" data-action="resume-match" style="text-align:left;align-items:stretch;min-height:auto;padding:16px">
         <span class="tag">Match in progress · ${esc(live.sport.name)}</span>
         <span style="font-size:1.4rem">${esc(teamName(live, 'home'))} <span class="big-score">${t.home} – ${t.away}</span> ${esc(teamName(live, 'away'))}</span>
         <span class="btn btn-primary">Resume match</span>
@@ -302,6 +316,7 @@ viewNew.after = () => {
       clock: { elapsedMs: 0, runningSince: null },
       events: [],
     });
+    enterFullscreen();
     go('live');
     kickOffPrompt();
   });
@@ -782,6 +797,7 @@ const actions = {
     store.set('history', h);
     store.del('live');
     setWakeLock(false);
+    exitFullscreen();
     go('match/' + m.id);
   },
   async whistle() {
@@ -817,6 +833,7 @@ const actions = {
     saveMatch(ref, m2);
     render();
   },
+  'resume-match'() { enterFullscreen(); go('live'); },
   'version-tap'() {
     const now = Date.now();
     versionTaps = versionTaps.filter((t) => now - t < 2500).concat(now);
