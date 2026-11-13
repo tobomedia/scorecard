@@ -6,7 +6,6 @@ Run: python3 scripts/gen-assets.py
 Outputs:
   frame-<colour>.svg  solid rounded outline, used with CSS border-image (slice 30)
   fill-<colour>.svg   same shape filled solid, used with border-image `fill`
-  drips-{a,b,c}.svg   paint drips (CSS mask, coloured by background-color)
   splat-{a,b}.svg     splatter blob + specks (CSS mask)
 
 Frame edges are straight, so border-image-repeat: round tiles seamlessly at any length.
@@ -85,32 +84,6 @@ for name, c in COLOURS.items():
         f'<path fill="{c}" fill-rule="evenodd" d="{rrect(13, 9)} {rrect(26, 2)}"/>'
     ))
     write(f'fill-{name}.svg', svg(f'<path fill="{c}" d="{rrect(13, 9)}"/>'))
-
-
-def drips(seed):
-    r = random.Random(seed)
-    shapes = []
-    x = r.uniform(10, 40)
-    while x < 190:
-        w = r.uniform(5, 9)
-        length = r.uniform(12, 32)
-        bulb = w * r.uniform(0.6, 0.75)
-        sh = w * 1.8  # shoulder where the drip leaves the edge
-        shapes.append(
-            f'<path d="M{x - sh:.1f},0 Q{x - w / 2:.1f},1 {x - w / 2:.1f},6 '
-            f'L{x - w * .38:.1f},{length:.1f} L{x + w * .38:.1f},{length:.1f} '
-            f'L{x + w / 2:.1f},6 Q{x + w / 2:.1f},1 {x + sh:.1f},0Z"/>'
-            f'<ellipse cx="{x:.1f}" cy="{length:.1f}" rx="{bulb:.1f}" ry="{bulb * 1.25:.1f}"/>'
-        )
-        x += r.uniform(55, 120)
-    # small specks under the drips
-    for _ in range(5):
-        shapes.append(f'<circle cx="{r.uniform(0, 200):.1f}" cy="{r.uniform(4, 38):.1f}" r="{r.uniform(.5, 1.4):.1f}"/>')
-    return svg(''.join(shapes), vb='0 0 200 40')
-
-
-for i, s in enumerate('abc'):
-    write(f'drips-{s}.svg', drips(100 + i))
 
 
 def splat(seed, blob=True):

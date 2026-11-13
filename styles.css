@@ -145,7 +145,7 @@ button:disabled { opacity: .35; }
   color: var(--ink);
   border-image-source: url('assets/paint/fill-lime.svg');
 }
-/* grey fill, lime outline, drips */
+/* grey fill, lime outline */
 .btn-paint {
   --fill: #5a5f69;
   border-image-source: url('assets/paint/frame-lime.svg');
@@ -166,22 +166,6 @@ button:disabled { opacity: .35; }
 .btn-small { min-height: 46px; padding: 0 12px; font-size: 1.05rem; }
 .btn-block { width: 100%; }
 .btn-big { min-height: 76px; font-size: 1.6rem; }
-
-/* paint drips hanging off the bottom edge */
-.btn-paint:last-of-type::after,
-.score-btn:last-child::after,
-.prompt-actions .btn-primary::after {
-  content: '';
-  position: absolute;
-  left: 0; right: 0;
-  top: calc(100% + var(--paint) - 4px);
-  height: 34px;
-  background: var(--drip, var(--lime));
-  -webkit-mask: url('assets/paint/drips-a.svg') left top / auto 100% no-repeat;
-          mask: url('assets/paint/drips-a.svg') left top / auto 100% no-repeat;
-  pointer-events: none;
-  z-index: -1;
-}
 
 /* splatter on primary call-to-action buttons */
 .btn-primary.btn-big::before,
@@ -273,7 +257,7 @@ label.check input { width: 26px; min-height: 26px; height: 26px; border: 0; bord
 @keyframes pulse { 50% { filter: brightness(1.18) drop-shadow(0 0 10px #a2ef0080); } }
 @media (prefers-reduced-motion: reduce) { .start-bar { animation: none; } }
 
-.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 12px; flex: 1; align-content: start; padding-bottom: 30px; }
+.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 12px; flex: 1; align-content: start; padding-bottom: 8px; }
 .columns .col { display: flex; flex-direction: column; gap: 16px; }
 .score-btn {
   min-height: 86px;
@@ -302,9 +286,6 @@ label.check input { width: 26px; min-height: 26px; height: 26px; border: 0; bord
 .col.away .score-btn:nth-child(odd) { background-position: center, right bottom, center; }
 .col.home .score-btn { --btn-fill: var(--navy-home); }
 .col.away .score-btn { --btn-fill: var(--navy-away); }
-.score-btn:nth-child(2)::after { -webkit-mask-image: url('assets/paint/drips-b.svg'); mask-image: url('assets/paint/drips-b.svg'); -webkit-mask-position: right top; mask-position: right top; }
-.score-btn:nth-child(3)::after { -webkit-mask-image: url('assets/paint/drips-c.svg'); mask-image: url('assets/paint/drips-c.svg'); }
-.col.away .score-btn::after { -webkit-mask-position: right top; mask-position: right top; }
 
 .actionbar {
   background: linear-gradient(transparent, var(--bg) 30%);
