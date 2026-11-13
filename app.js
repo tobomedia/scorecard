@@ -179,8 +179,9 @@ function viewHome() {
     <button class="btn-big btn-block" data-go="history">History</button>
     <button class="btn-big btn-block" data-go="settings">Settings</button>
     <div class="spacer"></div>
-    <p class="muted" style="text-align:center;font-size:.85rem">Add to your home screen to use offline.</p>`;
+    <p class="muted" style="text-align:center;font-size:.85rem">Add to your home screen to use offline.<br><span id="app-version"></span></p>`;
 }
+viewHome.after = () => showVersion();
 
 function viewNew() {
   if (getLive()) {
@@ -628,6 +629,34 @@ setInterval(() => {
 
 /* ---------- boot ---------- */
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    // Home-screen apps often resume instead of reloading, so check on every return to the foreground.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update().catch(() => {});
+    });
+  }).catch(() => {});
+  // A new version has installed and taken over: offer a reload rather than interrupting a match.
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController) showUpdateBar();
+  });
+}
+
+function showUpdateBar() {
+  if ($('#update-bar')) return;
+  const bar = document.createElement('button');
+  bar.id = 'update-bar';
+  bar.textContent = 'New version available – tap to update';
+  bar.addEventListener('click', () => location.reload());
+  document.body.appendChild(bar);
+}
+
+async function showVersion() {
+  const el = $('#app-version');
+  if (!el || !('caches' in window)) return;
+  try {
+    const v = (await caches.keys()).filter((k) => k.startsWith('scorecard-')).sort().pop();
+    if (v) el.textContent = v.replace('scorecard-', 'Version ');
+  } catch {}
 }
 if (!location.hash && getLive()) go('live'); else render();

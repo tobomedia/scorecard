@@ -18,7 +18,7 @@ Repo **Settings → Pages → Build and deployment → Deploy from a branch**, t
 
 ## Updating
 
-When you change any app file, bump `VERSION` in `sw.js` so installed phones fetch the new version.
+When you change any app file, bump `VERSION` in `sw.js`. Installed phones check for updates each time the app opens or comes back to the foreground, then show a "tap to update" bar.
 
 ## Files
 
