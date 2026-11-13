@@ -224,7 +224,7 @@ function viewHome() {
   const live = getLive();
   const t = live && totals(live);
   return `
-    <div class="topbar logo-bar"><h1 class="logo">Scorecard</h1></div>
+    <div class="logo-bar"><h1 class="logo"><img src="assets/brand/logo.webp" alt="Scorecard" width="900" height="516"></h1></div>
     ${live ? `
       <button class="card resume-card stack btn-block" data-go="live" style="text-align:left;align-items:stretch;min-height:auto;padding:16px">
         <span class="tag">Match in progress · ${esc(live.sport.name)}</span>

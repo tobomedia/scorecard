@@ -11,6 +11,7 @@ const ASSETS = [
   'icons/icon-180.png',
   'icons/icon-192.png',
   'icons/icon-512.png',
+  'assets/brand/logo.webp',
   'assets/fonts/roboto-condensed-latin-400-normal.woff2',
   'assets/fonts/roboto-condensed-latin-700-normal.woff2',
   'assets/paint/fill-grey.svg',
