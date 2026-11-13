@@ -4,13 +4,12 @@
 Run: python3 scripts/gen-assets.py
 
 Outputs:
-  frame-<colour>.svg  rough brush-stroke outline, used with CSS border-image (slice 30)
+  frame-<colour>.svg  solid rounded outline, used with CSS border-image (slice 30)
   fill-<colour>.svg   same shape filled solid, used with border-image `fill`
   drips-{a,b,c}.svg   paint drips (CSS mask, coloured by background-color)
   splat-{a,b}.svg     splatter blob + specks (CSS mask)
 
-The frame edges use jitter that repeats every 60 units, so border-image-repeat: round
-tiles seamlessly along edges of any length.
+Frame edges are straight, so border-image-repeat: round tiles seamlessly at any length.
 """
 import math
 import os
@@ -71,21 +70,21 @@ def write(name, content):
         f.write(content)
 
 
-outer = ring(8, 4.2, 11)
-inner = ring(26, 3.0, 23)
-# a second, fainter "overspray" pass gives the hand-painted double edge
-over_o = ring(4, 3.0, 41)
-over_i = ring(12, 2.6, 57)
+# Solid border band: rounded rectangle from inset 13 to 26 (slice 30), ~6px at a 14px border.
+def rrect(inset, radius):
+    x0 = y0 = inset
+    x1 = y1 = SIZE - inset
+    r = radius
+    return (f'M{x0 + r},{y0} H{x1 - r} A{r},{r} 0 0 1 {x1},{y0 + r} V{y1 - r} '
+            f'A{r},{r} 0 0 1 {x1 - r},{y1} H{x0 + r} A{r},{r} 0 0 1 {x0},{y1 - r} V{y0 + r} '
+            f'A{r},{r} 0 0 1 {x0 + r},{y0}Z')
+
 
 for name, c in COLOURS.items():
     write(f'frame-{name}.svg', svg(
-        f'<path fill="{c}" fill-rule="evenodd" d="{path(outer)} {path(inner)}"/>'
-        f'<path fill="{c}" fill-opacity=".45" fill-rule="evenodd" d="{path(over_o)} {path(over_i)}"/>'
+        f'<path fill="{c}" fill-rule="evenodd" d="{rrect(13, 9)} {rrect(26, 2)}"/>'
     ))
-    write(f'fill-{name}.svg', svg(
-        f'<path fill="{c}" d="{path(outer)}"/>'
-        f'<path fill="{c}" fill-opacity=".45" d="{path(over_o)}"/>'
-    ))
+    write(f'fill-{name}.svg', svg(f'<path fill="{c}" d="{rrect(13, 9)}"/>'))
 
 
 def drips(seed):
