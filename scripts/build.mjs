@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = resolve(root, process.argv[2] || '_site');
 
-const STATIC = ['index.html', 'sw.js', 'manifest.webmanifest', 'icons'];
+const STATIC = ['index.html', 'sw.js', 'manifest.webmanifest', 'icons', 'assets'];
 const HASHED = ['app.js', 'styles.css'];
 
 const hash = (buf) => createHash('sha256').update(buf).digest('hex').slice(0, 8);
@@ -40,7 +40,13 @@ for (const f of HASHED) {
 
 // 2. Overall version: hash of every shipped file, so any change produces a new service worker.
 const all = createHash('sha256');
-const files = [...HASHED, 'index.html', 'manifest.webmanifest', ...readdirSync(join(root, 'icons')).map((f) => 'icons/' + f)];
+const listDir = (d) => readdirSync(join(root, d), { recursive: true }).map((f) => `${d}/${f}`).filter((f) => extname(f));
+const files = [...HASHED, 'index.html', 'manifest.webmanifest', ...listDir('icons'), ...listDir('assets')];
+
+// Every shipped asset must be precached by the service worker, or it won't work offline.
+const swSource = read('sw.js').toString();
+const missing = files.filter((f) => /^(icons|assets)\//.test(f) && !f.endsWith('.txt') && !swSource.includes(`'${f}'`));
+if (missing.length) throw new Error(`build: add these to ASSETS in sw.js: ${missing.join(', ')}`);
 for (const f of files.sort()) all.update(f).update(read(f));
 all.update(read('sw.js'));
 const contentHash = all.digest('hex').slice(0, 8);

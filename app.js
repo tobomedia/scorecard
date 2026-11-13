@@ -168,16 +168,16 @@ function viewHome() {
   const live = getLive();
   const t = live && totals(live);
   return `
-    <div class="topbar"><h1>Scorecard</h1></div>
+    <div class="topbar logo-bar"><h1 class="logo">Scorecard</h1></div>
     ${live ? `
-      <button class="card stack btn-block" data-go="live" style="text-align:left;align-items:stretch;min-height:auto;padding:16px">
+      <button class="card resume-card stack btn-block" data-go="live" style="text-align:left;align-items:stretch;min-height:auto;padding:16px">
         <span class="tag">Match in progress · ${esc(live.sport.name)}</span>
         <span style="font-size:1.4rem">${esc(teamName(live, 'home'))} <span class="big-score">${t.home} – ${t.away}</span> ${esc(teamName(live, 'away'))}</span>
         <span class="btn btn-primary">Resume match</span>
       </button>` : `
       <button class="btn-primary btn-big btn-block" data-go="new">New match</button>`}
-    <button class="btn-big btn-block" data-go="history">History</button>
-    <button class="btn-big btn-block" data-go="settings">Settings</button>
+    <button class="btn-big btn-block btn-paint" data-go="history">History</button>
+    <button class="btn-big btn-block btn-paint" data-go="settings">Settings</button>
     <div class="spacer"></div>
     <p class="muted" style="text-align:center;font-size:.85rem">Add to your home screen to use offline.</p>`;
 }
@@ -315,7 +315,7 @@ function addScore(side, typeId) {
     <h2>${esc(fu.name)} – ${esc(teamName(m, side))}</h2>
     <p class="muted">After ${esc(st.name.toLowerCase())} at ${minute}'</p>
     <div class="prompt-actions">
-      <button data-modal="missed">Missed</button>
+      <button class="btn-grey" data-modal="missed">Missed</button>
       <button class="btn-primary" data-modal="made">Made +${fu.points}</button>
     </div>`, (res) => {
     const made = res === 'made';
@@ -415,7 +415,7 @@ function viewMatch(id) {
   const t = totals(m);
   const bd = (side) => {
     const lines = breakdown(m, side);
-    return `<div class="card"><strong class="${side === 'home' ? '' : ''}" style="color:var(--${side})">${esc(teamName(m, side))}</strong>
+    return `<div class="card team-card ${side}"><strong class="team-label">${esc(teamName(m, side))}</strong>
       ${lines.length ? `<ul>${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : '<p class="muted">No scores</p>'}</div>`;
   };
   const evs = sortedEvents(m);
