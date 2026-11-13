@@ -29,6 +29,7 @@ const PRESETS = [
   {
     id: 'rugby-union',
     name: 'Rugby Union',
+    periods: { count: 2, minutes: 40 },
     scoreTypes: [
       { id: 'try', name: 'Try', points: 5, followUpId: 'conversion', hidden: false },
       { id: 'conversion', name: 'Conversion', points: 2, followUpId: null, hidden: true },
@@ -39,18 +40,34 @@ const PRESETS = [
   {
     id: 'football',
     name: 'Football',
+    periods: { count: 2, minutes: 45 },
     scoreTypes: [{ id: 'goal', name: 'Goal', points: 1, followUpId: null, hidden: false }],
   },
 ];
 
+const DEFAULT_PERIODS = { count: 2, minutes: 40 };
 const getSports = () => {
   let s = store.get('sports');
   if (!s) { s = clone(PRESETS); store.set('sports', s); }
+  for (const sp of s) { // sports saved before periods existed
+    if (!sp.periods) sp.periods = clone((PRESETS.find((p) => p.id === sp.id) || {}).periods || DEFAULT_PERIODS);
+  }
   return s;
 };
 const getTeams = () => store.get('teams', []);
-const getHistory = () => store.get('history', []);
-const getLive = () => store.get('live', null);
+const getHistory = () => store.get('history', []).map(normaliseMatch);
+const getLive = () => normaliseMatch(store.get('live', null));
+
+/* Matches saved before periods existed get sensible defaults. */
+function normaliseMatch(m) {
+  if (!m) return m;
+  m.periods = m.periods || clone(m.sport.periods || DEFAULT_PERIODS);
+  m.period = m.period || 1;
+  m.playedMs = m.playedMs || 0;
+  m.reminded = m.reminded || [];
+  m.inBreak = !!m.inBreak;
+  return m;
+}
 
 function getMatch(ref) {
   return ref === 'live' ? getLive() : getHistory().find((m) => m.id === ref) || null;
@@ -65,21 +82,59 @@ function saveMatch(ref, m) {
 const DEFAULT_NAMES = { home: 'Home', away: 'Away' };
 const teamName = (m, side) => m[side] || DEFAULT_NAMES[side];
 
-/* ---------- clock ---------- */
+/* ---------- clock & periods ----------
+   The clock runs per period. elapsedMs is time within the current period; the match clock
+   shown is periodStart + elapsed (so the 2nd half always starts at 40:00). Past the period
+   length the clock shows added time, e.g. 40:00 +2:13, and events are stamped 40+3'. */
 const elapsedMs = (m) => m.clock.elapsedMs + (m.clock.runningSince ? Date.now() - m.clock.runningSince : 0);
-const minuteOf = (ms) => Math.floor(ms / 60000) + 1;
+const periodMs = (m) => m.periods.minutes * 60000;
+const periodStartMin = (m, p = m.period) => (p - 1) * m.periods.minutes;
+const periodEndMin = (m, p = m.period) => p * m.periods.minutes;
+const isLastPeriod = (m) => m.period >= m.periods.count;
+const isTimeUp = (m) => elapsedMs(m) >= periodMs(m);
+/* match minute for an event happening now: 1-based, can run past the period end */
+const matchMinute = (m) => periodStartMin(m) + Math.floor(elapsedMs(m) / 60000) + 1;
+
 function fmtClock(ms) {
   const s = Math.floor(ms / 1000);
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
+function fmtMatchClock(m) {
+  const el = elapsedMs(m);
+  const len = periodMs(m);
+  const base = periodStartMin(m) * 60000;
+  if (el < len) return fmtClock(base + el);
+  const over = Math.floor((el - len) / 1000);
+  return `${fmtClock(base + len)} <span class="added">+${Math.floor(over / 60)}:${String(over % 60).padStart(2, '0')}</span>`;
+}
+function fmtMinute(m, e) {
+  const end = periodEndMin(m, e.period || 1);
+  return e.period && e.minute > end ? `${end}+${e.minute - end}'` : `${e.minute}'`;
+}
+
+function periodName(m, p = m.period) {
+  if (m.periods.count === 2) return p === 1 ? '1st half' : '2nd half';
+  if (m.periods.count === 4) return `Q${p}`;
+  if (m.periods.count === 1) return 'Match';
+  return `Period ${p}`;
+}
+/* what the whistle at the end of period p is called */
+function whistleName(m, p = m.period) {
+  if (p >= m.periods.count) return 'Full time';
+  if (m.periods.count === 2) return 'Half time';
+  return `End of ${periodName(m, p)}`;
+}
+const playedMs = (m) => m.playedMs + (m.inBreak ? 0 : elapsedMs(m));
 
 /* ---------- scoring (always derived from the event log) ---------- */
 const typeById = (m, id) => m.sport.scoreTypes.find((t) => t.id === id);
 
+const isMarker = (e) => !!e.marker; // time-up / whistle entries in the log, never scored
+
 function totals(m) {
   const t = { home: 0, away: 0 };
   for (const e of m.events) {
-    if (!e.made) continue;
+    if (!e.made || isMarker(e)) continue;
     const st = typeById(m, e.scoreTypeId);
     if (st) t[e.team] += st.points;
   }
@@ -87,7 +142,7 @@ function totals(m) {
 }
 
 function sortedEvents(m) {
-  return [...m.events].sort((a, b) => a.minute - b.minute || a.createdAt - b.createdAt);
+  return [...m.events].sort((a, b) => (a.period || 1) - (b.period || 1) || a.minute - b.minute || a.createdAt - b.createdAt);
 }
 
 function breakdown(m, side) {
@@ -192,6 +247,7 @@ function viewNew() {
   const sports = getSports();
   const last = store.get('lastSport');
   const opts = sports.map((s) => `<option value="${esc(s.id)}" ${s.id === last ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
+  const sel = sports.find((s) => s.id === last) || sports[0];
   const teams = getTeams().map((t) => `<option value="${esc(t)}">`).join('');
   return `
     <div class="topbar"><button class="btn-ghost btn-small" data-go="">‹ Back</button><h2>New match</h2></div>
@@ -200,12 +256,22 @@ function viewNew() {
       <label>Home team<input name="home" placeholder="Home" list="teams" autocomplete="off" maxlength="40"></label>
       <label>Away team<input name="away" placeholder="Away" list="teams" autocomplete="off" maxlength="40"></label>
       <datalist id="teams">${teams}</datalist>
+      <div class="row">
+        <label>Periods<input name="pcount" type="number" inputmode="numeric" min="1" max="8" value="${sel ? sel.periods.count : 2}" required></label>
+        <label>Minutes each<input name="pminutes" type="number" inputmode="numeric" min="1" max="120" value="${sel ? sel.periods.minutes : 40}" required></label>
+      </div>
       <button class="btn-primary btn-big" type="submit">Start match</button>
     </form>`;
 }
 viewNew.after = () => {
   const f = $('#new-form');
   if (!f) return;
+  f.elements.sport.addEventListener('change', () => { // reset periods to the sport's default
+    const sp = getSports().find((s) => s.id === f.elements.sport.value);
+    if (!sp) return;
+    f.elements.pcount.value = sp.periods.count;
+    f.elements.pminutes.value = sp.periods.minutes;
+  });
   f.addEventListener('submit', (e) => {
     e.preventDefault();
     const fd = new FormData(f);
@@ -224,6 +290,14 @@ viewNew.after = () => {
       home, away,
       startedAt: Date.now(),
       endedAt: null,
+      periods: {
+        count: Math.min(8, Math.max(1, parseInt(fd.get('pcount'), 10) || sport.periods.count)),
+        minutes: Math.min(120, Math.max(1, parseInt(fd.get('pminutes'), 10) || sport.periods.minutes)),
+      },
+      period: 1,
+      inBreak: false,
+      playedMs: 0,
+      reminded: [],
       clock: { elapsedMs: 0, runningSince: null },
       events: [],
     });
@@ -271,24 +345,38 @@ function viewLive() {
       ${buttons.map((st) => `<button class="score-btn" data-score="${side}:${esc(st.id)}">${esc(st.name)}<small>+${st.points}</small></button>`).join('')}
     </div>`;
   const running = !!m.clock.runningSince;
+  const over = isTimeUp(m) && !m.inBreak;
+  const started = m.clock.elapsedMs > 0 || running;
+  let bar = '';
+  if (m.inBreak) {
+    bar = `<button class="btn-primary start-bar" data-action="next-period">▶ Start ${esc(periodName(m, m.period + 1))}</button>`;
+  } else if (over) {
+    bar = `<button class="whistle-bar" data-action="whistle">⏱ ${esc(whistleName(m))}</button>`;
+  } else if (!running) {
+    bar = `<button class="btn-primary start-bar" data-action="start-clock">▶ ${started ? 'Resume clock' : 'Start clock'}</button>`;
+  }
+  const status = m.inBreak ? whistleName(m) : periodName(m);
   return `
     <div class="topbar"><button class="btn-ghost btn-small" data-go="">‹ Home</button><span class="tag">${esc(m.sport.name)}</span></div>
-    <div class="scoreboard">
+    ${over ? `<div class="timeup-banner">${esc(whistleName(m))}<small>Tap the button below when the ref blows</small></div>` : ''}
+    <div class="scoreboard${over ? ' is-over' : ''}">
       <div class="team home">${esc(teamName(m, 'home'))}</div>
       <div></div>
       <div class="team away">${esc(teamName(m, 'away'))}</div>
       <div class="score">${t.home}</div>
       <div class="dash">–</div>
       <div class="score">${t.away}</div>
+      <div class="period-label">${esc(status)}</div>
       <div class="clock-row">
-        <span class="clock ${running ? '' : 'paused'}" id="clock">${fmtClock(elapsedMs(m))}</span>
+        <span class="clock ${running ? '' : 'paused'} ${over ? 'over' : ''}" id="clock">${fmtMatchClock(m)}</span>
         ${running ? '<button class="clock-btn" data-action="pause-clock">❚❚ Pause</button>' : ''}
       </div>
     </div>
-    ${running ? '' : `<button class="btn-primary start-bar" data-action="start-clock">▶ ${m.clock.elapsedMs ? 'Resume clock' : 'Start clock'}</button>`}
+    ${bar}
+    ${!running && started && !over && !m.inBreak ? `<button class="btn-ghost btn-small" data-action="whistle">End ${esc(periodName(m))} early</button>` : ''}
     <div class="columns">${col('home')}${col('away')}</div>
     <div class="actionbar">
-      <button data-action="undo" ${m.events.length ? '' : 'disabled'}>Undo</button>
+      <button data-action="undo" ${m.events.some((e) => !isMarker(e)) ? '' : 'disabled'}>Undo</button>
       <button data-go="log/live">Log (${m.events.length})</button>
       <button class="btn-danger" data-action="end">End</button>
     </div>`;
@@ -306,20 +394,21 @@ function addScore(side, typeId) {
   const m = getLive();
   const st = typeById(m, typeId);
   if (!st) return;
-  const minute = minuteOf(elapsedMs(m));
-  updateLive((m) => m.events.push({ id: uid(), team: side, scoreTypeId: st.id, minute, made: true, createdAt: Date.now() }));
+  const minute = matchMinute(m);
+  const period = m.period;
+  updateLive((m) => m.events.push({ id: uid(), team: side, scoreTypeId: st.id, minute, period, made: true, createdAt: Date.now() }));
   if (navigator.vibrate) navigator.vibrate(30);
   const fu = st.followUpId && typeById(m, st.followUpId);
   if (!fu) return toast(`${st.name} – ${teamName(m, side)}`);
   openModal(`
     <h2>${esc(fu.name)} – ${esc(teamName(m, side))}</h2>
-    <p class="muted">After ${esc(st.name.toLowerCase())} at ${minute}'</p>
+    <p class="muted">After ${esc(st.name.toLowerCase())} at ${fmtMinute(m, { minute, period })}</p>
     <div class="prompt-actions">
       <button class="btn-grey" data-modal="missed">Missed</button>
       <button class="btn-primary" data-modal="made">Made +${fu.points}</button>
     </div>`, (res) => {
     const made = res === 'made';
-    updateLive((m) => m.events.push({ id: uid(), team: side, scoreTypeId: fu.id, minute, made, createdAt: Date.now() }));
+    updateLive((m) => m.events.push({ id: uid(), team: side, scoreTypeId: fu.id, minute, period, made, createdAt: Date.now() }));
     toast(`${fu.name} ${made ? 'made' : 'missed'}`);
   });
 }
@@ -336,11 +425,24 @@ function viewLog(ref) {
     ${evs.length ? '<p class="muted" style="text-align:center;font-size:.85rem">Tap an event to edit or delete it.</p>' : ''}`;
 }
 
+function markerLabel(m, e) {
+  return e.marker === 'timeup' ? `Time up – ${periodName(m, e.period)}` : whistleName(m, e.period);
+}
+
 function eventRow(m, e, ref) {
+  if (isMarker(e)) {
+    const inner = `
+      <span class="min">${fmtMinute(m, e)}</span>
+      <span class="marker-icon">${e.marker === 'timeup' ? '⏱' : '📣'}</span>
+      <span class="grow"><span>${esc(markerLabel(m, e))}</span></span>`;
+    return ref
+      ? `<li><button class="list-item marker ${e.marker}" data-action="edit-event" data-ref="${esc(ref)}" data-id="${esc(e.id)}">${inner}</button></li>`
+      : `<li class="list-item marker ${e.marker}">${inner}</li>`;
+  }
   const st = typeById(m, e.scoreTypeId);
   const label = `${esc(st ? st.name : 'Unknown')}${e.made ? '' : ' (missed)'}`;
   const inner = `
-    <span class="min">${e.minute}'</span>
+    <span class="min">${fmtMinute(m, e)}</span>
     <span class="dot ${e.team}"></span>
     <span class="grow"><span class="${e.made ? '' : 'missed'}">${label}</span><br><span class="tag">${esc(teamName(m, e.team))}</span></span>
     <span class="tag">${e.made && st ? '+' + st.points : ''}</span>`;
@@ -352,7 +454,9 @@ function eventRow(m, e, ref) {
 function eventForm(ref, e) {
   const m = getMatch(ref);
   const isNew = !e;
-  e = e || { team: 'home', scoreTypeId: m.sport.scoreTypes[0]?.id, minute: minuteOf(elapsedMs(m)), made: true };
+  e = e || { team: 'home', scoreTypeId: m.sport.scoreTypes[0]?.id, minute: matchMinute(m), period: m.period, made: true };
+  const periodOpts = Array.from({ length: m.periods.count }, (_, i) => i + 1)
+    .map((p) => `<option value="${p}" ${p === (e.period || 1) ? 'selected' : ''}>${esc(periodName(m, p))}</option>`).join('');
   const typeOpts = m.sport.scoreTypes.map((st) => `<option value="${esc(st.id)}" ${st.id === e.scoreTypeId ? 'selected' : ''}>${esc(st.name)} (+${st.points})</option>`).join('');
   openModal(`
     <h2>${isNew ? 'Add event' : 'Edit event'}</h2>
@@ -363,7 +467,11 @@ function eventForm(ref, e) {
       </select></label>
       <label>Score type<select name="type">${typeOpts}</select></label>
       <div class="row">
+        ${m.periods.count > 1 ? `<label>Period<select name="period">${periodOpts}</select></label>` : ''}
         <label>Minute<input name="minute" type="number" inputmode="numeric" min="1" max="999" value="${e.minute}" required></label>
+      </div>
+      <p class="muted form-hint">For added time use the full minute, e.g. 42 for 40+2.</p>
+      <div class="row">
         <label>Result<select name="made">
           <option value="1" ${e.made ? 'selected' : ''}>Made</option>
           <option value="0" ${e.made ? '' : 'selected'}>Missed</option>
@@ -392,7 +500,8 @@ function eventForm(ref, e) {
     ev.preventDefault();
     const fd = new FormData(f);
     const minute = Math.max(1, parseInt(fd.get('minute'), 10) || 1);
-    closeModal({ team: fd.get('team'), scoreTypeId: fd.get('type'), minute, made: fd.get('made') === '1' });
+    const period = parseInt(fd.get('period'), 10) || 1;
+    closeModal({ team: fd.get('team'), scoreTypeId: fd.get('type'), minute, period, made: fd.get('made') === '1' });
   });
 }
 
@@ -424,7 +533,7 @@ function viewMatch(id) {
     <div class="scoreboard" style="position:static">
       <div class="team home">${esc(teamName(m, 'home'))}</div><div></div><div class="team away">${esc(teamName(m, 'away'))}</div>
       <div class="score">${t.home}</div><div class="dash">–</div><div class="score">${t.away}</div>
-      <div class="clock-row tag">${new Date(m.startedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })} · ${fmtClock(m.clock.elapsedMs)} played</div>
+      <div class="clock-row tag">${new Date(m.startedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })} · ${fmtClock(playedMs(m))} played</div>
     </div>
     <h3>Breakdown</h3>
     <div class="breakdown">${bd('home')}${bd('away')}</div>
@@ -445,11 +554,14 @@ function viewSettings() {
     <h3>Sports &amp; scoring</h3>
     <ul class="list">${sports.map((s) => `
       <li><button class="list-item" data-go="sport/${esc(s.id)}">
-        <span class="grow">${esc(s.name)}<br><span class="tag">${s.scoreTypes.map((t) => `${esc(t.name)} ${t.points}`).join(' · ')}</span></span>
+        <span class="grow">${esc(s.name)}<br><span class="tag">${s.periods.count} × ${s.periods.minutes} min · ${s.scoreTypes.map((t) => `${esc(t.name)} ${t.points}`).join(' · ')}</span></span>
         <span class="tag">Edit ›</span></button></li>`).join('')}
     </ul>
     <button data-go="sport/new">+ New sport</button>
     ${missingPresets.length ? `<button class="btn-ghost" data-action="restore-presets">Restore default sports</button>` : ''}
+    <h3>Time-up alerts</h3>
+    <label class="check"><input type="checkbox" data-action="toggle-sound" ${store.get('sound', true) === false ? '' : 'checked'}> Beep when a half (or period) is up</label>
+    <p class="muted" style="font-size:.95rem">The clock always flashes, and Android phones also vibrate.</p>
     <h3>Saved teams</h3>
     ${teams.length ? `<ul class="list">${teams.map((t, i) => `
       <li class="list-item"><span class="grow">${esc(t)}</span><button class="btn-small btn-ghost" data-action="delete-team" data-i="${i}" aria-label="Delete ${esc(t)}">✕</button></li>`).join('')}</ul>`
@@ -462,7 +574,7 @@ function viewSport(id) {
   if (!sportDraft || sportDraft._for !== id) {
     const existing = getSports().find((s) => s.id === id);
     sportDraft = existing ? clone(existing)
-      : { id: uid(), name: '', scoreTypes: [{ id: uid(), name: '', points: 1, followUpId: null, hidden: false }] };
+      : { id: uid(), name: '', periods: clone(DEFAULT_PERIODS), scoreTypes: [{ id: uid(), name: '', points: 1, followUpId: null, hidden: false }] };
     sportDraft._for = id;
     sportDraft._isNew = !existing;
   }
@@ -485,6 +597,10 @@ function viewSport(id) {
     <div class="topbar"><button class="btn-ghost btn-small" data-action="cancel-sport">‹ Cancel</button><h2>${d._isNew ? 'New sport' : 'Edit sport'}</h2></div>
     <form id="sport-form" class="stack">
       <label>Sport name<input name="name" value="${esc(d.name)}" placeholder="e.g. Rugby League" maxlength="40" required></label>
+      <div class="row">
+        <label>Periods<input name="pcount" type="number" inputmode="numeric" min="1" max="8" value="${d.periods.count}" required></label>
+        <label>Minutes each<input name="pminutes" type="number" inputmode="numeric" min="1" max="120" value="${d.periods.minutes}" required></label>
+      </div>
       <h3>Score types</h3>
       ${rows}
       <button type="button" data-action="add-type">+ Add score type</button>
@@ -498,6 +614,10 @@ function readSportForm() {
   const f = $('#sport-form');
   if (!f || !sportDraft) return;
   sportDraft.name = f.elements.name.value;
+  sportDraft.periods = {
+    count: Math.min(8, Math.max(1, parseInt(f.elements.pcount.value, 10) || 2)),
+    minutes: Math.min(120, Math.max(1, parseInt(f.elements.pminutes.value, 10) || 40)),
+  };
   f.querySelectorAll('.st-editor').forEach((el) => {
     const st = sportDraft.scoreTypes[+el.dataset.i];
     st.name = $('[name=st-name]', el).value;
@@ -531,6 +651,71 @@ viewSport.after = () => {
   });
 };
 
+/* ---------- periods: whistle & time-up cues ---------- */
+
+/* Stops the clock for the current period and logs the whistle. Mutates m. */
+function blowWhistle(m) {
+  const el = elapsedMs(m);
+  m.events.push({ id: uid(), marker: 'whistle', period: m.period, minute: periodStartMin(m) + Math.max(1, Math.ceil(el / 60000)), team: null, made: false, createdAt: Date.now() });
+  m.playedMs += el;
+  m.clock = { elapsedMs: el, runningSince: null };
+  m.inBreak = true;
+}
+
+const REMINDER_MIN = 10; // repeat the cue if the period runs this far over
+
+/* Called on every clock tick: logs time-up and fires the cue once per period. */
+function checkTimeUp() {
+  const m = getLive();
+  if (!m || m.inBreak || !m.clock.runningSince || !isTimeUp(m)) return;
+  const logged = m.events.some((e) => e.marker === 'timeup' && e.period === m.period);
+  const overBy = elapsedMs(m) - periodMs(m);
+  if (!logged) {
+    m.events.push({ id: uid(), marker: 'timeup', period: m.period, minute: periodEndMin(m), team: null, made: false, createdAt: Date.now() });
+    store.set('live', m);
+    if ($('#clock')) render();
+    if (overBy < 60000) cue(); // don't sound off if we only noticed late (app was closed)
+  } else if (overBy >= REMINDER_MIN * 60000 && !m.reminded.includes(m.period)) {
+    m.reminded.push(m.period);
+    store.set('live', m);
+    cue();
+    toast(`${REMINDER_MIN} min over – still playing?`);
+  }
+}
+
+function cue() {
+  if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]);
+  beep();
+  document.body.classList.remove('flash');
+  void document.body.offsetWidth; // restart the animation
+  document.body.classList.add('flash');
+}
+
+/* Web Audio beep. iPhone only allows sound after a tap, so armAudio() runs on every tap. */
+let audioCtx = null;
+function armAudio() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch { /* no audio */ }
+}
+function beep() {
+  if (!audioCtx || store.get('sound', true) === false) return;
+  const t0 = audioCtx.currentTime;
+  [[0, 880], [0.25, 880], [0.5, 1320]].forEach(([at, hz]) => {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'square';
+    o.frequency.value = hz;
+    g.gain.setValueAtTime(0.0001, t0 + at);
+    g.gain.exponentialRampToValueAtTime(0.25, t0 + at + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.2);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(t0 + at);
+    o.stop(t0 + at + 0.22);
+  });
+}
+
 /* ---------- actions ---------- */
 const actions = {
   'start-clock'() { startClock(); },
@@ -545,8 +730,9 @@ const actions = {
   },
   undo() {
     const m = getLive();
-    if (!m || !m.events.length) return;
-    const last = m.events.reduce((a, b) => (b.createdAt > a.createdAt ? b : a));
+    const scores = m ? m.events.filter((e) => !isMarker(e)) : [];
+    if (!scores.length) return;
+    const last = scores.reduce((a, b) => (b.createdAt > a.createdAt ? b : a));
     const st = typeById(m, last.scoreTypeId);
     updateLive((m) => { m.events = m.events.filter((e) => e.id !== last.id); });
     toast(`Undid ${st ? st.name : 'event'} – ${teamName(m, last.team)}`);
@@ -555,7 +741,7 @@ const actions = {
     const ok = await confirmModal('End the match?', 'The final score is saved to history. You can still edit the log afterwards.', 'End match', 'Keep playing', true);
     const m = getLive();
     if (!ok || !m) return;
-    if (m.clock.runningSince) { m.clock.elapsedMs += Date.now() - m.clock.runningSince; m.clock.runningSince = null; }
+    if (!m.inBreak) blowWhistle(m);
     m.endedAt = Date.now();
     const h = getHistory();
     h.unshift(m);
@@ -564,10 +750,42 @@ const actions = {
     setWakeLock(false);
     go('match/' + m.id);
   },
+  async whistle() {
+    const m = getLive();
+    if (!m) return;
+    if (isLastPeriod(m)) return actions.end();
+    if (!isTimeUp(m)) {
+      const ok = await confirmModal(`End ${periodName(m)} early?`, `The clock shows ${fmtClock(periodStartMin(m) * 60000 + elapsedMs(m))}.`, whistleName(m), 'Cancel');
+      if (!ok) return;
+    }
+    updateLive((m) => blowWhistle(m));
+    toast(whistleName(getLive()));
+  },
+  'next-period'() {
+    updateLive((m) => {
+      m.period += 1;
+      m.inBreak = false;
+      m.clock = { elapsedMs: 0, runningSince: Date.now() };
+    });
+    armAudio();
+    if (navigator.vibrate) navigator.vibrate(50);
+  },
   'add-event'(el) { eventForm(el.dataset.ref, null); },
-  'edit-event'(el) {
-    const m = getMatch(el.dataset.ref);
-    eventForm(el.dataset.ref, m.events.find((e) => e.id === el.dataset.id));
+  async 'edit-event'(el) {
+    const ref = el.dataset.ref;
+    const m = getMatch(ref);
+    const e = m.events.find((x) => x.id === el.dataset.id);
+    if (!isMarker(e)) return eventForm(ref, e);
+    const ok = await confirmModal(markerLabel(m, e), `Logged at ${fmtMinute(m, e)}. This entry doesn't affect the score.`, 'Delete entry', 'Keep', true);
+    if (!ok) return;
+    const m2 = getMatch(ref);
+    m2.events = m2.events.filter((x) => x.id !== e.id);
+    saveMatch(ref, m2);
+    render();
+  },
+  'toggle-sound'(el) {
+    store.set('sound', el.checked);
+    if (el.checked) { armAudio(); beep(); }
   },
   'delete-match'(el) {
     if (!confirm('Delete this match permanently?')) return;
@@ -607,6 +825,7 @@ const actions = {
 };
 
 document.addEventListener('click', (e) => {
+  armAudio();
   const el = e.target.closest('[data-go],[data-action],[data-score],[data-modal]');
   if (!el) return;
   if (el.dataset.modal) { e.preventDefault(); return closeModal(el.dataset.modal); }
@@ -620,10 +839,10 @@ document.addEventListener('click', (e) => {
 
 /* ---------- clock tick ---------- */
 setInterval(() => {
+  checkTimeUp();
   const c = $('#clock');
-  if (!c) return;
-  const m = getLive();
-  if (m) c.textContent = fmtClock(elapsedMs(m));
+  const m = c && getLive();
+  if (m) c.innerHTML = fmtMatchClock(m);
 }, 500);
 
 /* ---------- boot ---------- */

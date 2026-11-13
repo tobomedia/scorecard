@@ -66,6 +66,16 @@ When you watch a match you lose track of the score breakdown, who scored when an
 - While the clock isn't running, a large **Start clock** or **Resume clock** bar shows on the live screen. Once the clock runs it becomes a **Pause** button.
 - **Pause** and **End match** both ask for confirmation in-app.
 - Every event is stamped with the match minute (for example 23').
+- **Periods:** each sport has a default number of periods and length (Rugby Union 2 × 40, Football 2 × 45). Both can be changed per match on the New match screen.
+- The clock runs per period. Each period starts at its own offset, so the 2nd half always starts at 40:00.
+- **Time up:** when a period's time is reached:
+  - the clock turns red and flashes, showing added time (40:00 +2:10)
+  - a HALF TIME / FULL TIME banner appears and the screen flashes
+  - Android phones vibrate, and a beep plays (can be turned off in Settings)
+  - a "Time up" entry is added to the log
+- A big **Half time** / **Full time** button stops the clock and logs the whistle with its added-time minute (e.g. 40+3'). Full time ends the match.
+- If a period runs **10 minutes over** with no whistle, the cue repeats.
+- Scores in added time are stamped 40+n'.
 - The clock keeps running correctly when the app is in the background or the screen is locked. Elapsed time is calculated from timestamps, not from ticks.
 
 ### 6.5 Live match screen (portrait)
