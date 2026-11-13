@@ -1,5 +1,5 @@
 // Bump VERSION whenever app files change so phones pick up the update.
-const VERSION = 'scorecard-v1';
+const VERSION = 'scorecard-v2';
 const ASSETS = [
   './',
   'index.html',

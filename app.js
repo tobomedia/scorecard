@@ -131,6 +131,7 @@ function closeModal(result) {
   const cb = modal._onClose;
   modal._onClose = null;
   if (modal.open) modal.close();
+  modal.innerHTML = '';
   if (cb) cb(result);
 }
 modal.addEventListener('click', (e) => { if (e.target === modal) closeModal('dismiss'); });
@@ -227,8 +228,38 @@ viewNew.after = () => {
       events: [],
     });
     go('live');
+    kickOffPrompt();
   });
 };
+
+function startClock() {
+  updateLive((m) => { if (!m.clock.runningSince) m.clock.runningSince = Date.now(); });
+  if (navigator.vibrate) navigator.vibrate(50);
+}
+
+function kickOffPrompt() {
+  const m = getLive();
+  openModal(`
+    <div class="kickoff">
+      <h2>${esc(teamName(m, 'home'))} v ${esc(teamName(m, 'away'))}</h2>
+      <p class="muted">Tap at kick-off to start the match clock.</p>
+      <button class="btn-primary kickoff-btn" data-modal="start">▶<br>Start clock</button>
+      <button class="btn-ghost btn-block" data-modal="later">Not yet</button>
+    </div>`, (res) => { if (res === 'start') startClock(); });
+}
+
+/* Resolves true if the user confirms. Tapping outside counts as cancel. */
+function confirmModal(title, body, okLabel, cancelLabel, danger = false) {
+  return new Promise((resolve) => {
+    openModal(`
+      <h2>${esc(title)}</h2>
+      ${body ? `<p class="muted">${esc(body)}</p>` : ''}
+      <div class="prompt-actions">
+        <button data-modal="cancel">${esc(cancelLabel)}</button>
+        <button class="${danger ? 'btn-danger' : 'btn-primary'}" data-modal="ok">${esc(okLabel)}</button>
+      </div>`, (res) => resolve(res === 'ok'));
+  });
+}
 
 function viewLive() {
   const m = getLive();
@@ -251,9 +282,10 @@ function viewLive() {
       <div class="score">${t.away}</div>
       <div class="clock-row">
         <span class="clock ${running ? '' : 'paused'}" id="clock">${fmtClock(elapsedMs(m))}</span>
-        <button class="btn-small ${running ? '' : 'btn-primary'}" data-action="toggle-clock">${running ? 'Pause' : (m.clock.elapsedMs ? 'Resume' : 'Start')}</button>
+        ${running ? '<button class="clock-btn" data-action="pause-clock">❚❚ Pause</button>' : ''}
       </div>
     </div>
+    ${running ? '' : `<button class="btn-primary start-bar" data-action="start-clock">▶ ${m.clock.elapsedMs ? 'Resume clock' : 'Start clock'}</button>`}
     <div class="columns">${col('home')}${col('away')}</div>
     <div class="actionbar">
       <button data-action="undo" ${m.events.length ? '' : 'disabled'}>Undo</button>
@@ -501,14 +533,14 @@ viewSport.after = () => {
 
 /* ---------- actions ---------- */
 const actions = {
-  'toggle-clock'() {
+  'start-clock'() { startClock(); },
+  async 'pause-clock'() {
+    const ok = await confirmModal('Pause the clock?', 'Use this for half-time or stoppages.', '❚❚ Pause', 'Keep running');
+    if (!ok) return;
     updateLive((m) => {
-      if (m.clock.runningSince) {
-        m.clock.elapsedMs += Date.now() - m.clock.runningSince;
-        m.clock.runningSince = null;
-      } else {
-        m.clock.runningSince = Date.now();
-      }
+      if (!m.clock.runningSince) return;
+      m.clock.elapsedMs += Date.now() - m.clock.runningSince;
+      m.clock.runningSince = null;
     });
   },
   undo() {
@@ -519,9 +551,10 @@ const actions = {
     updateLive((m) => { m.events = m.events.filter((e) => e.id !== last.id); });
     toast(`Undid ${st ? st.name : 'event'} – ${teamName(m, last.team)}`);
   },
-  end() {
+  async end() {
+    const ok = await confirmModal('End the match?', 'The final score is saved to history. You can still edit the log afterwards.', 'End match', 'Keep playing', true);
     const m = getLive();
-    if (!m || !confirm('End this match and save it to history?')) return;
+    if (!ok || !m) return;
     if (m.clock.runningSince) { m.clock.elapsedMs += Date.now() - m.clock.runningSince; m.clock.runningSince = null; }
     m.endedAt = Date.now();
     const h = getHistory();

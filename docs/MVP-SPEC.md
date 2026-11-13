@@ -62,6 +62,9 @@ When you watch a match you lose track of the score breakdown, who scored when an
 ### 6.4 Match clock
 
 - Simple count-up clock (mm:ss) with **Start / Pause**.
+- **Kick-off prompt:** after "Start match", an overlay with a large **Start clock** button and a "Not yet" option.
+- While the clock isn't running, a large **Start clock** or **Resume clock** bar shows on the live screen. Once the clock runs it becomes a **Pause** button.
+- **Pause** and **End match** both ask for confirmation in-app.
 - Every event is stamped with the match minute (for example 23').
 - The clock keeps running correctly when the app is in the background or the screen is locked. Elapsed time is calculated from timestamps, not from ticks.
 
