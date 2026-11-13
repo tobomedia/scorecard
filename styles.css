@@ -478,3 +478,25 @@ body.flash::after {
 .list-item.marker .grow > span:first-child { font-size: 1.1rem; text-transform: uppercase; letter-spacing: .03em; }
 .marker-icon { width: 12px; text-align: center; font-size: 1rem; }
 .form-hint { font-size: .9rem; margin-top: -4px; }
+
+/* ---------- Debug mode ---------- */
+body.debug::before {
+  content: 'DEBUG';
+  position: fixed;
+  top: calc(6px + env(safe-area-inset-top));
+  right: 8px;
+  z-index: 30;
+  background: #ff00aa;
+  color: #fff;
+  font-weight: 700;
+  font-size: .75rem;
+  letter-spacing: .08em;
+  padding: 2px 8px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+.debug-panel { --fill: #2a1830; border-image-source: url('assets/paint/frame-slate.svg'); }
+.debug-panel strong { color: #ff66cc; font-size: .95rem; text-transform: uppercase; letter-spacing: .05em; }
+.debug-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 8px; }
+.debug-grid button { font-size: .9rem; min-height: 44px; padding: 0 4px; }
+.app-version { cursor: default; -webkit-user-select: none; user-select: none; }

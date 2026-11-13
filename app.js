@@ -212,7 +212,8 @@ function render() {
   const [name, ...args] = route();
   const view = views[name] || viewHome;
   const app = $('#app');
-  app.innerHTML = view(...args) + `<footer class="app-version">Version ${esc(APP_VERSION)}</footer>`;
+  app.innerHTML = view(...args) + `<footer class="app-version" data-action="version-tap">Version ${esc(APP_VERSION)}</footer>`;
+  document.body.classList.toggle('debug', debugOn());
   window.scrollTo(0, 0);
   if (view.after) view.after(...args);
   setWakeLock(name === 'live' && !!getLive());
@@ -375,6 +376,7 @@ function viewLive() {
     ${bar}
     ${!running && started && !over && !m.inBreak ? `<button class="btn-ghost btn-small" data-action="whistle">End ${esc(periodName(m))} early</button>` : ''}
     <div class="columns">${col('home')}${col('away')}</div>
+    ${debugOn() ? debugPanel(m) : ''}
     <div class="actionbar">
       <button data-action="undo" ${m.events.some((e) => !isMarker(e)) ? '' : 'disabled'}>Undo</button>
       <button data-go="log/live">Log (${m.events.length})</button>
@@ -716,6 +718,38 @@ function beep() {
   });
 }
 
+/* ---------- debug mode ----------
+   Hidden: tap the version number 5 times. Lets you jump the match clock to test cues. */
+const debugOn = () => store.get('debug', false) === true;
+
+function debugPanel(m) {
+  const b = (label, action, extra = '') => `<button class="btn-small" data-action="${action}" ${extra}>${label}</button>`;
+  return `
+    <div class="card debug-panel">
+      <strong>Debug · ${esc(periodName(m))}</strong>
+      <div class="debug-grid">
+        ${b('+1 min', 'debug-skip', 'data-ms="60000"')}
+        ${b('+5 min', 'debug-skip', 'data-ms="300000"')}
+        ${b('10s before end', 'debug-jump', 'data-to="-10000"')}
+        ${b('+10 min over', 'debug-jump', 'data-to="600500"')}
+        ${b('Reset period', 'debug-jump', 'data-to="0"')}
+        ${b('Test cue', 'debug-cue')}
+      </div>
+    </div>`;
+}
+
+/* Sets time elapsed in the current period, keeping the clock running or paused. */
+function setElapsed(m, ms) {
+  const running = !!m.clock.runningSince;
+  m.clock.elapsedMs = Math.max(0, ms);
+  m.clock.runningSince = running ? Date.now() : null;
+  // let time-up and the reminder fire again for this period after jumping back
+  m.events = m.events.filter((e) => !(e.marker === 'timeup' && e.period === m.period && ms < periodMs(m)));
+  m.reminded = m.reminded.filter((p) => !(p === m.period && ms < periodMs(m) + REMINDER_MIN * 60000));
+}
+
+let versionTaps = [];
+
 /* ---------- actions ---------- */
 const actions = {
   'start-clock'() { startClock(); },
@@ -783,6 +817,23 @@ const actions = {
     saveMatch(ref, m2);
     render();
   },
+  'version-tap'() {
+    const now = Date.now();
+    versionTaps = versionTaps.filter((t) => now - t < 2500).concat(now);
+    if (versionTaps.length < 5) return;
+    versionTaps = [];
+    store.set('debug', !debugOn());
+    toast(debugOn() ? 'Debug mode on' : 'Debug mode off');
+    render();
+  },
+  'debug-skip'(el) { updateLive((m) => setElapsed(m, elapsedMs(m) + Number(el.dataset.ms))); },
+  'debug-jump'(el) {
+    updateLive((m) => {
+      const to = Number(el.dataset.to);
+      setElapsed(m, to < 0 ? periodMs(m) + to : to === 0 ? 0 : periodMs(m) + to);
+    });
+  },
+  'debug-cue'() { cue(); },
   'toggle-sound'(el) {
     store.set('sound', el.checked);
     if (el.checked) { armAudio(); beep(); }
