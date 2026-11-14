@@ -553,3 +553,6 @@ body.debug::before {
 .topbar button, .topbar .tag { white-space: nowrap; }
 .topbar .tag { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .topbar { gap: 10px; }
+
+/* score buttons look inactive while the clock is stopped (tapping offers to start it) */
+.columns.stopped .score-btn { opacity: .4; filter: saturate(.5); }

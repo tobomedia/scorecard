@@ -391,7 +391,7 @@ function viewLive() {
     </div>
     ${bar}
     ${!running && started && !over && !m.inBreak ? `<button class="btn-ghost btn-small" data-action="whistle">End ${esc(periodName(m))} early</button>` : ''}
-    <div class="columns">${col('home')}${col('away')}</div>
+    <div class="columns${running ? '' : ' stopped'}">${col('home')}${col('away')}</div>
     ${debugOn() ? debugPanel(m) : ''}
     <div class="actionbar">
       <button data-action="undo" ${m.events.some((e) => !isMarker(e)) ? '' : 'disabled'}>Undo</button>
@@ -408,10 +408,22 @@ function updateLive(fn) {
   render();
 }
 
-function addScore(side, typeId) {
-  const m = getLive();
+/* Scores only count while the clock runs. If it's stopped, offer to start it (or the next
+   period during a break) so a real score isn't lost when someone forgot to restart it. */
+async function addScore(side, typeId) {
+  let m = getLive();
+  if (!m || !typeById(m, typeId)) return;
+  if (!m.clock.runningSince) {
+    const label = m.inBreak ? `Start ${periodName(m, m.period + 1)} & add score` : 'Start clock & add score';
+    const ok = await confirmModal("The clock isn't running", m.inBreak
+      ? `It's ${whistleName(m).toLowerCase()}. Start the next period to add this score.`
+      : 'Scores can only be added while the clock is running.', label, 'Cancel');
+    if (!ok) return;
+    if (m.inBreak) actions['next-period']();
+    else startClock();
+    m = getLive();
+  }
   const st = typeById(m, typeId);
-  if (!st) return;
   const minute = matchMinute(m);
   const period = m.period;
   updateLive((m) => m.events.push({ id: uid(), team: side, scoreTypeId: st.id, minute, period, made: true, createdAt: Date.now() }));
