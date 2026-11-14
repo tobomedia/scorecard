@@ -220,6 +220,7 @@ const views = {
   match: viewMatch,
   settings: viewSettings,
   sport: viewSport,
+  view: viewShared,
 };
 
 function render() {
@@ -294,10 +295,7 @@ viewNew.after = () => {
     if (!sport) return toast('Pick a sport');
     const home = fd.get('home').trim();
     const away = fd.get('away').trim();
-    const teams = getTeams();
-    for (const n of [home, away]) if (n && !teams.some((t) => t.toLowerCase() === n.toLowerCase())) teams.push(n);
-    teams.sort((a, b) => a.localeCompare(b));
-    store.set('teams', teams);
+    rememberTeams([home, away]);
     store.set('lastSport', sport.id);
     store.set('live', {
       id: uid(),
@@ -373,7 +371,7 @@ function viewLive() {
   }
   const status = m.inBreak ? whistleName(m) : periodName(m);
   return `
-    <div class="topbar"><button class="btn-ghost btn-small" data-go="">‹ Home</button><span class="tag">${esc(m.sport.name)}</span></div>
+    <div class="topbar"><button class="btn-ghost btn-small" data-go="">‹ Home</button><span class="tag">${esc(m.sport.name)}</span><span class="spacer"></span><button class="btn-ghost btn-small" data-action="edit-match" data-ref="live">Edit</button></div>
     ${over ? `<div class="timeup-banner">${esc(whistleName(m))}<small>Tap the button below when the ref blows</small></div>` : ''}
     <div class="scoreboard${over ? ' is-over' : ''}">
       <div class="team home">${esc(teamName(m, 'home'))}</div>
@@ -538,6 +536,196 @@ function viewHistory() {
 function viewMatch(id) {
   const m = getMatch(id);
   if (!m) { setTimeout(() => go('history'), 0); return ''; }
+  return `
+    <div class="topbar"><button class="btn-ghost btn-small" data-go="history">‹ History</button><span class="tag">${esc(m.sport.name)}</span></div>
+    ${matchSummary(m)}
+    <button class="btn-primary" data-action="share-match" data-id="${esc(m.id)}">Share result</button>
+    <div class="row">
+      <button data-action="edit-match" data-ref="${esc(m.id)}">Edit match</button>
+      <button data-go="log/${esc(m.id)}">Edit log</button>
+    </div>
+    <button class="btn-danger" data-action="delete-match" data-id="${esc(m.id)}">Delete match</button>`;
+}
+
+/* ---------- edit match ---------- */
+
+/* Changes period length/count and shifts event times in later periods to match.
+   e.g. 2x40 -> 2x35: a 2nd-half try at 46' becomes 41'. Mutates m. */
+function retimeMatch(m, periods) {
+  const diff = periods.minutes - m.periods.minutes;
+  for (const e of m.events) {
+    const p = e.period || 1;
+    if (e.marker === 'timeup') e.minute = p * periods.minutes;
+    else if (p > 1) e.minute = Math.max(1, e.minute + (p - 1) * diff);
+  }
+  m.periods = periods;
+  // let time-up / reminder fire again if the current period is no longer over
+  if (!m.endedAt && !m.inBreak && !isTimeUp(m)) {
+    m.events = m.events.filter((e) => !(e.marker === 'timeup' && e.period === m.period));
+    m.reminded = m.reminded.filter((p) => p !== m.period);
+  }
+}
+
+const toLocalInput = (ms) => {
+  const d = new Date(ms);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+};
+
+function editMatchForm(ref) {
+  const m = getMatch(ref);
+  if (!m) return;
+  const teams = getTeams().map((t) => `<option value="${esc(t)}">`).join('');
+  const usedPeriods = Math.max(m.period || 1, ...m.events.map((e) => e.period || 1));
+  openModal(`
+    <h2>Edit match</h2>
+    <form id="match-form" class="stack" method="dialog">
+      <label>Home team<input name="home" value="${esc(m.home)}" placeholder="Home" list="teams-edit" autocomplete="off" maxlength="40"></label>
+      <label>Away team<input name="away" value="${esc(m.away)}" placeholder="Away" list="teams-edit" autocomplete="off" maxlength="40"></label>
+      <datalist id="teams-edit">${teams}</datalist>
+      <div class="row">
+        <label>Periods<input name="pcount" type="number" inputmode="numeric" min="${usedPeriods}" max="8" value="${m.periods.count}" required></label>
+        <label>Minutes each<input name="pminutes" type="number" inputmode="numeric" min="1" max="120" value="${m.periods.minutes}" required></label>
+      </div>
+      <p class="muted form-hint">Changing the minutes moves event times in later periods to match.</p>
+      <label>Date &amp; kick-off<input name="date" type="datetime-local" value="${toLocalInput(m.startedAt)}" required></label>
+      <div class="row">
+        <button type="button" data-modal="cancel">Cancel</button>
+        <button type="submit" class="btn-primary">Save</button>
+      </div>
+    </form>`, (res) => {
+    if (!res || typeof res !== 'object') return;
+    const m2 = getMatch(ref);
+    m2.home = res.home;
+    m2.away = res.away;
+    const shift = res.startedAt - m2.startedAt;
+    m2.startedAt = res.startedAt;
+    if (m2.endedAt) m2.endedAt += shift;
+    retimeMatch(m2, res.periods);
+    saveMatch(ref, m2);
+    rememberTeams([res.home, res.away]);
+    if (ref !== 'live') sortHistory();
+    toast('Match updated');
+    render();
+  });
+  const f = $('#match-form');
+  f.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const count = parseInt(f.elements.pcount.value, 10) || m.periods.count;
+    if (count < usedPeriods) return toast(`This match already has events in ${periodName(m, usedPeriods)}`);
+    const when = new Date(f.elements.date.value).getTime();
+    closeModal({
+      home: f.elements.home.value.trim(),
+      away: f.elements.away.value.trim(),
+      periods: { count: Math.min(8, count), minutes: Math.min(120, Math.max(1, parseInt(f.elements.pminutes.value, 10) || m.periods.minutes)) },
+      startedAt: Number.isFinite(when) ? when : m.startedAt,
+    });
+  });
+}
+
+function rememberTeams(names) {
+  const teams = getTeams();
+  for (const n of names) if (n && !teams.some((t) => t.toLowerCase() === n.toLowerCase())) teams.push(n);
+  teams.sort((a, b) => a.localeCompare(b));
+  store.set('teams', teams);
+}
+function sortHistory() {
+  store.set('history', getHistory().sort((a, b) => b.startedAt - a.startedAt));
+}
+
+/* ---------- sharing ----------
+   The whole match is packed into the link after '#', so nothing is sent to a server.
+   Format: 'z' + base64url(deflate(JSON)) or 'j' + base64url(JSON) where compression isn't available. */
+const b64url = {
+  enc: (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
+  dec: (str) => Uint8Array.from(atob(str.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0)),
+};
+async function pipeBytes(bytes, stream) {
+  const buf = await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer();
+  return new Uint8Array(buf);
+}
+
+/* compact form: short keys, score types and events as arrays */
+function packMatch(m) {
+  const types = m.sport.scoreTypes;
+  return {
+    v: 1, id: m.id, h: m.home, a: m.away, d: m.startedAt, pl: playedMs(m),
+    s: { n: m.sport.name, t: types.map((t) => [t.id, t.name, t.points, t.followUpId || 0, t.hidden ? 1 : 0]) },
+    p: [m.periods.count, m.periods.minutes],
+    e: sortedEvents(m).map((e) => e.marker
+      ? [e.marker === 'timeup' ? 't' : 'w', e.period || 1, e.minute]
+      : [e.team === 'home' ? 0 : 1, types.findIndex((t) => t.id === e.scoreTypeId), e.period || 1, e.minute, e.made ? 1 : 0]),
+  };
+}
+function unpackMatch(o) {
+  if (!o || o.v !== 1) throw new Error('bad version');
+  const types = o.s.t.map(([id, name, points, fu, hidden]) => ({ id: String(id), name: String(name), points: Number(points) || 0, followUpId: fu ? String(fu) : null, hidden: !!hidden }));
+  const events = o.e.map((x, i) => (typeof x[0] === 'string'
+    ? { id: 'e' + i, marker: x[0] === 't' ? 'timeup' : 'whistle', period: x[1], minute: x[2], team: null, made: false, createdAt: i }
+    : { id: 'e' + i, team: x[0] ? 'away' : 'home', scoreTypeId: (types[x[1]] || {}).id, period: x[2], minute: x[3], made: !!x[4], createdAt: i }));
+  return normaliseMatch({
+    id: String(o.id), home: String(o.h || ''), away: String(o.a || ''), startedAt: Number(o.d), endedAt: Number(o.d) + Number(o.pl || 0),
+    sport: { id: 'shared', name: String(o.s.n), scoreTypes: types, periods: { count: o.p[0], minutes: o.p[1] } },
+    periods: { count: o.p[0], minutes: o.p[1] }, period: o.p[0], inBreak: true, playedMs: Number(o.pl) || 0,
+    clock: { elapsedMs: 0, runningSince: null }, events,
+  });
+}
+
+async function encodeMatch(m) {
+  const json = new TextEncoder().encode(JSON.stringify(packMatch(m)));
+  if ('CompressionStream' in window) {
+    try { return 'z' + b64url.enc(await pipeBytes(json, new CompressionStream('deflate-raw'))); } catch { /* fall through */ }
+  }
+  return 'j' + b64url.enc(json);
+}
+async function decodeMatch(code) {
+  let bytes = b64url.dec(code.slice(1));
+  if (code[0] === 'z') bytes = await pipeBytes(bytes, new DecompressionStream('deflate-raw'));
+  else if (code[0] !== 'j') throw new Error('unknown format');
+  return unpackMatch(JSON.parse(new TextDecoder().decode(bytes)));
+}
+
+const shareUrl = (code) => `${location.origin}${location.pathname}#/view/${code}`;
+
+async function shareMatch(m) {
+  const t = totals(m);
+  const title = `${teamName(m, 'home')} ${t.home}–${t.away} ${teamName(m, 'away')}`;
+  const url = shareUrl(await encodeMatch(m));
+  const text = `${title} · ${m.sport.name}, ${new Date(m.startedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`;
+  if (navigator.share) {
+    try { await navigator.share({ title, text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(`${text}\n${url}`); toast('Link copied'); }
+  catch { prompt('Copy this link:', url); }
+}
+
+/* #/view/<code>: read-only view of a shared match. Decoding is async, so render twice. */
+let sharedView = { code: null, match: null, error: false };
+function viewShared(code) {
+  if (sharedView.code !== code) {
+    sharedView = { code, match: null, error: false };
+    decodeMatch(code || '')
+      .then((m) => { sharedView.match = m; })
+      .catch(() => { sharedView.error = true; })
+      .finally(() => { if (route()[1] === code) render(); });
+    return '<p class="empty">Loading match…</p>';
+  }
+  if (sharedView.error) {
+    return `<p class="empty">This link doesn't contain a valid match. It may have been cut off when it was copied.</p>
+      <button data-go="">Open Scorecard</button>`;
+  }
+  const m = sharedView.match;
+  if (!m) return '<p class="empty">Loading match…</p>';
+  const saved = getHistory().some((h) => h.id === m.id);
+  return `
+    <div class="topbar"><span class="tag shared-tag">Shared result</span><span class="tag">${esc(m.sport.name)}</span></div>
+    ${matchSummary(m)}
+    ${saved ? `<button data-go="match/${esc(m.id)}">Saved in your history ›</button>`
+      : '<button class="btn-primary" data-action="save-shared">Save to my history</button>'}
+    <button class="btn-ghost" data-go="">Open Scorecard</button>`;
+}
+
+/* Scoreboard, breakdown and timeline: used by match detail and shared-link views. */
+function matchSummary(m) {
   const t = totals(m);
   const bd = (side) => {
     const lines = breakdown(m, side);
@@ -546,7 +734,6 @@ function viewMatch(id) {
   };
   const evs = sortedEvents(m);
   return `
-    <div class="topbar"><button class="btn-ghost btn-small" data-go="history">‹ History</button><span class="tag">${esc(m.sport.name)}</span></div>
     <div class="scoreboard" style="position:static">
       <div class="team home">${esc(teamName(m, 'home'))}</div><div></div><div class="team away">${esc(teamName(m, 'away'))}</div>
       <div class="score">${t.home}</div><div class="dash">–</div><div class="score">${t.away}</div>
@@ -555,11 +742,7 @@ function viewMatch(id) {
     <h3>Breakdown</h3>
     <div class="breakdown">${bd('home')}${bd('away')}</div>
     <h3>Timeline</h3>
-    ${evs.length ? `<ul class="list">${evs.map((e) => eventRow(m, e, null)).join('')}</ul>` : '<p class="empty">No events.</p>'}
-    <div class="row">
-      <button data-go="log/${esc(m.id)}">Edit log</button>
-      <button class="btn-danger" data-action="delete-match" data-id="${esc(m.id)}">Delete match</button>
-    </div>`;
+    ${evs.length ? `<ul class="list">${evs.map((e) => eventRow(m, e, null)).join('')}</ul>` : '<p class="empty">No events.</p>'}`;
 }
 
 function viewSettings() {
@@ -854,6 +1037,22 @@ const actions = {
   'toggle-sound'(el) {
     store.set('sound', el.checked);
     if (el.checked) { armAudio(); beep(); }
+  },
+  'edit-match'(el) { editMatchForm(el.dataset.ref); },
+  async 'share-match'(el) {
+    const m = getMatch(el.dataset.id);
+    if (m) await shareMatch(m);
+  },
+  'save-shared'() {
+    const m = sharedView.match;
+    if (!m) return;
+    const h = getHistory().filter((x) => x.id !== m.id);
+    h.push(clone(m));
+    store.set('history', h);
+    sortHistory();
+    rememberTeams([m.home, m.away]);
+    toast('Saved to your history');
+    render();
   },
   'delete-match'(el) {
     if (!confirm('Delete this match permanently?')) return;

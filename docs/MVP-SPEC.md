@@ -114,6 +114,22 @@ When you watch a match you lose track of the score breakdown, who scored when an
 - **End match:** confirm → match saved to history → back to the home screen.
 - Only one live match at a time.
 
+### 6.7a Edit match
+
+- **Edit match** on the match detail screen, and **Edit** on the live screen, change:
+  - team names
+  - number of periods and minutes per period
+  - date and kick-off time
+- Changing the minutes re-times events in later periods. With 2 × 40 → 2 × 35, a 2nd-half score at 46' becomes 41', and "Time up" entries move to the new period end.
+- The sport can't be changed after the match starts, because score types wouldn't line up.
+
+### 6.7b Share result
+
+- **Share result** on a finished match opens the phone's share sheet with "Home 7–3 Away" and a link. Where there's no share sheet, the link is copied instead.
+- The whole match is packed into the link after `#` (compressed), so no server is involved.
+- Opening the link shows a read-only result (score, breakdown, timeline) with **Save to my history**. Saving twice is prevented.
+- Later: share a live match in progress.
+
 ### 6.8 History
 
 - A list of finished matches: date, sport, teams, final score.

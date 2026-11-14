@@ -486,3 +486,6 @@ body.debug::before {
 .debug-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 8px; }
 .debug-grid button { font-size: .9rem; min-height: 44px; padding: 0 4px; }
 .app-version { cursor: default; -webkit-user-select: none; user-select: none; }
+
+/* ---------- Shared result ---------- */
+.shared-tag { color: var(--lime); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
