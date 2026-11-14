@@ -52,6 +52,11 @@ all.update(read('sw.js'));
 const contentHash = all.digest('hex').slice(0, 8);
 const label = process.env.BUILD_NUMBER ? `${process.env.BUILD_NUMBER} (${contentHash.slice(0, 6)})` : contentHash.slice(0, 6);
 
+// Live score server address (set by the deploy workflow once Cloudflare is configured).
+// Empty = live sharing hidden in the app.
+const liveApi = (process.env.LIVE_API_URL || '').trim().replace(/\/$/, '');
+if (liveApi && !/^https?:\/\/[\w.:-]+$/.test(liveApi)) throw new Error(`build: LIVE_API_URL looks wrong: ${liveApi}`);
+
 // 3. Rewrite references
 function rewrite(file, edits) {
   const p = join(out, file);
@@ -67,6 +72,7 @@ rewrite('index.html', [
   ['href="styles.css"', `href="${renamed['styles.css']}"`],
   ['src="app.js"', `src="${renamed['app.js']}"`],
   ['<meta name="app-version" content="dev">', `<meta name="app-version" content="${label}">`],
+  ['<meta name="live-api" content="">', `<meta name="live-api" content="${liveApi}">`],
 ]);
 rewrite('sw.js', [
   ["'styles.css'", `'${renamed['styles.css']}'`],
@@ -76,4 +82,5 @@ rewrite('sw.js', [
 
 console.log(`Built ${out}`);
 console.log(`  version  ${label}`);
+console.log(`  live api ${liveApi || '(not set: live sharing hidden)'}`);
 for (const [from, to] of Object.entries(renamed)) console.log(`  ${from} -> ${to}`);

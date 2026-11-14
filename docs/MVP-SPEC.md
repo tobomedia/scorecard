@@ -128,7 +128,20 @@ When you watch a match you lose track of the score breakdown, who scored when an
 - **Share result** on a finished match opens the phone's share sheet with "Home 7–3 Away" and a link. Where there's no share sheet, the link is copied instead.
 - The whole match is packed into the link after `#` (compressed), so no server is involved.
 - Opening the link shows a read-only result (score, breakdown, timeline) with **Save to my history**. Saving twice is prevented.
-- Later: share a live match in progress.
+
+### 6.7c Live score sharing
+
+- **Go live** on the match screen creates a match ID and a secret key, then shares a viewer link (`#/watch/<id>`). A red **LIVE** badge then shows; tap it to share again or stop. It turns grey while the phone has no signal.
+- Every change sends the full match state to a Cloudflare Worker (`live/`). Without signal, the latest state is retried when the phone reconnects. While live, the phone also sends a state update every 60 s, so viewers can tell it's still online.
+- **Viewers see:**
+  - the score and a ticking clock with the period
+  - the timeline (newest first) and the breakdown
+  - a "TRY!" flash for new scores
+  - "up to date", or "scorer's phone offline – last update N min ago" after 2.5 min with no update
+- **At full time** viewers see the final result and **Save to my history**. If the scorer stops sharing, viewers are told.
+- Only the phone that went live can update the match. Viewers are read-only. No accounts.
+- The server deletes matches 30 days after their last update. It runs on Cloudflare's free plan.
+- Later: hand scoring over to another phone (a scorer link).
 
 ### 6.8 History
 

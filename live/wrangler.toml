@@ -1,0 +1,15 @@
+# Live score relay. Deployed automatically by .github/workflows/deploy.yml
+# when the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repo secrets are set.
+name = "scorecard-live"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "LIVE"
+class_name = "LiveMatch"
+
+# Free plan only supports SQLite-backed Durable Objects
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LiveMatch"]

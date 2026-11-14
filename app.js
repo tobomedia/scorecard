@@ -12,6 +12,7 @@ const store = {
   },
   set(k, v) {
     try { localStorage.setItem('sc.' + k, JSON.stringify(v)); } catch (e) { toast('Could not save: storage full?'); }
+    if (k === 'live' && v && v.live) publishLive(v); // live score sharing: push every change
   },
   del(k) { try { localStorage.removeItem('sc.' + k); } catch {} },
 };
@@ -221,6 +222,7 @@ const views = {
   settings: viewSettings,
   sport: viewSport,
   view: viewShared,
+  watch: viewWatch,
 };
 
 function render() {
@@ -232,6 +234,7 @@ function render() {
   window.scrollTo(0, 0);
   if (view.after) view.after(...args);
   setWakeLock(name === 'live' && !!getLive());
+  if (name !== 'watch') stopWatching();
 }
 
 /* ---------- views ---------- */
@@ -371,7 +374,7 @@ function viewLive() {
   }
   const status = m.inBreak ? whistleName(m) : periodName(m);
   return `
-    <div class="topbar"><button class="btn-ghost btn-small" data-go="">‹ Home</button><span class="tag">${esc(m.sport.name)}</span><span class="spacer"></span><button class="btn-ghost btn-small" data-action="edit-match" data-ref="live">Edit</button></div>
+    <div class="topbar"><button class="btn-ghost btn-small" data-go="">‹ Home</button><span class="tag">${esc(m.sport.name)}</span><span class="spacer"></span>${liveButton(m)}<button class="btn-ghost btn-small" data-action="edit-match" data-ref="live">Edit</button></div>
     ${over ? `<div class="timeup-banner">${esc(whistleName(m))}<small>Tap the button below when the ref blows</small></div>` : ''}
     <div class="scoreboard${over ? ' is-over' : ''}">
       <div class="team home">${esc(teamName(m, 'home'))}</div>
@@ -724,6 +727,247 @@ function viewShared(code) {
     <button class="btn-ghost" data-go="">Open Scorecard</button>`;
 }
 
+/* ---------- live score sharing ----------
+   Scorer: "Go live" creates a match id + secret key. Every change to the live match PUTs the
+   whole state (see store.set) to the Cloudflare relay in live/. Offline? The latest state is
+   kept and retried, so scoring never waits on the network.
+   Viewer: #/watch/<id> holds a WebSocket open and re-renders on every update; the clock ticks
+   locally from the last update, corrected for the difference between phone and server clocks. */
+const LIVE_API = (document.querySelector('meta[name=live-api]')?.content || '').replace(/\/$/, '');
+const randomToken = (bytes) => b64url.enc(crypto.getRandomValues(new Uint8Array(bytes)));
+const watchUrl = (id) => `${location.origin}${location.pathname}#/watch/${id}`;
+const HEARTBEAT_MS = 60000;           // resend while live so viewers can tell the scorer is still online
+const STALE_MS = 150000;              // viewers warn after this long without an update
+
+function packLive(m) {
+  return {
+    ...packMatch(m),
+    c: { p: m.period, el: elapsedMs(m), run: !!m.clock.runningSince, br: !!m.inBreak },
+    end: !!m.endedAt,
+    stop: !!m.liveStopped,
+  };
+}
+
+const livePub = { pending: null, inFlight: false, timer: null, retry: 0, status: 'idle', lastSent: 0 };
+
+function publishLive(m) {
+  if (!LIVE_API || !m || !m.live) return;
+  livePub.pending = { id: m.live.id, key: m.live.key, body: JSON.stringify(packLive(m)) };
+  clearTimeout(livePub.timer);
+  livePub.timer = setTimeout(flushLive, 200); // coalesce bursts (e.g. try + conversion)
+}
+
+async function flushLive() {
+  if (livePub.inFlight || !livePub.pending) return;
+  const job = livePub.pending;
+  livePub.pending = null;
+  livePub.inFlight = true;
+  let retryIn = 0;
+  try {
+    const r = await fetch(`${LIVE_API}/m/${job.id}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${job.key}`, 'Content-Type': 'application/json' },
+      body: job.body,
+    });
+    if (r.status === 403 || r.status === 413 || r.status === 400) {
+      setLiveStatus('pending');
+      toast("Live update rejected – try stopping and restarting live sharing");
+    } else if (!r.ok) {
+      throw new Error(`HTTP ${r.status}`);
+    } else {
+      livePub.retry = 0;
+      livePub.lastSent = Date.now();
+      setLiveStatus('ok');
+    }
+  } catch {
+    if (!livePub.pending) livePub.pending = job; // keep the newest state for the retry
+    livePub.retry = Math.min(livePub.retry + 1, 5);
+    retryIn = 1000 * 2 ** livePub.retry;          // 2s, 4s … 32s
+    setLiveStatus('pending');
+  } finally {
+    livePub.inFlight = false;
+    if (livePub.pending) {
+      clearTimeout(livePub.timer);
+      livePub.timer = setTimeout(flushLive, retryIn);
+    }
+  }
+}
+window.addEventListener('online', () => { livePub.retry = 0; flushLive(); });
+
+function setLiveStatus(status) {
+  livePub.status = status;
+  const b = $('#live-badge');
+  if (b) b.dataset.status = status;
+}
+
+function liveHeartbeat() {
+  const m = getLive();
+  if (m?.live && !livePub.pending && !livePub.inFlight && Date.now() - livePub.lastSent > HEARTBEAT_MS) publishLive(m);
+}
+
+function liveButton(m) {
+  if (!LIVE_API) return '';
+  return m.live
+    ? `<button id="live-badge" class="live-badge" data-action="live-menu" data-status="${livePub.status}">● LIVE</button>`
+    : '<button class="btn-ghost btn-small" data-action="go-live">Go live</button>';
+}
+
+async function shareLiveLink(m) {
+  if (!m?.live) return;
+  const url = watchUrl(m.live.id);
+  const title = `${teamName(m, 'home')} v ${teamName(m, 'away')} – live`;
+  const text = `Follow ${teamName(m, 'home')} v ${teamName(m, 'away')} live`;
+  if (navigator.share) {
+    try { await navigator.share({ title, text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(`${text}\n${url}`); toast('Live link copied'); }
+  catch { prompt('Copy this live link:', url); }
+}
+
+/* ----- viewer ----- */
+const watch = { id: null, ws: null, msg: null, match: null, offset: 0, status: 'connecting', retry: 0, gone: false, timer: null, ping: null };
+
+function unpackLive(msg, offset) {
+  const st = msg.state;
+  const m = unpackMatch(st);
+  m.period = st.c.p;
+  m.inBreak = st.c.br;
+  // server time -> this phone's time, so the clock ticks correctly here
+  m.clock = { elapsedMs: st.c.el, runningSince: st.c.run && !st.end ? msg.updatedAt - offset : null };
+  m.endedAt = st.end ? msg.updatedAt - offset : null;
+  m.stopped = !!st.stop;
+  return m;
+}
+
+function startWatching(id) {
+  stopWatching();
+  Object.assign(watch, { id, msg: null, match: null, status: 'connecting', retry: 0, gone: false });
+  connectWatch();
+}
+function stopWatching() {
+  clearTimeout(watch.timer);
+  clearInterval(watch.ping);
+  if (watch.ws) { watch.ws.onclose = null; try { watch.ws.close(); } catch {} }
+  watch.ws = null;
+  watch.id = null;
+}
+function connectWatch() {
+  const id = watch.id;
+  if (!id) return;
+  const ws = new WebSocket(`${LIVE_API.replace(/^http/, 'ws')}/m/${id}/ws`);
+  watch.ws = ws;
+  ws.onopen = () => {
+    watch.retry = 0;
+    clearInterval(watch.ping);
+    watch.ping = setInterval(() => { try { ws.send('ping'); } catch {} }, 25000);
+  };
+  ws.onmessage = (e) => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { return; }
+    watch.offset = msg.serverNow - Date.now();
+    if (msg.pong) return;
+    watch.status = 'live';
+    if (msg.gone) { watch.gone = true; render(); return; }
+    const prev = watch.match;
+    watch.msg = msg;
+    watch.match = unpackLive(msg, watch.offset);
+    announceScore(prev, watch.match);
+    if (route()[0] === 'watch' && !modal.open) render();
+  };
+  ws.onclose = () => {
+    clearInterval(watch.ping);
+    if (watch.id !== id || watch.gone) return;
+    watch.status = 'reconnecting';
+    tickWatch();
+    watch.retry = Math.min(watch.retry + 1, 5);
+    watch.timer = setTimeout(connectWatch, 1000 * 2 ** (watch.retry - 1));
+  };
+}
+document.addEventListener('visibilitychange', () => {
+  // phones drop sockets in the background; reconnect straight away when looking again
+  if (document.visibilityState === 'visible' && watch.id && (!watch.ws || watch.ws.readyState > 1)) {
+    clearTimeout(watch.timer);
+    watch.retry = 0;
+    connectWatch();
+  }
+});
+
+/* big "TRY!" flash for viewers when a new score arrives */
+function announceScore(prev, m) {
+  if (!prev) return;
+  const before = totals(prev);
+  const after = totals(m);
+  if (before.home === after.home && before.away === after.away) return;
+  const side = after.home !== before.home ? 'home' : 'away';
+  // announce the biggest new score (a try, not the conversion that arrived with it)
+  const made = (x) => sortedEvents(x).filter((e) => !isMarker(e) && e.made && e.team === side);
+  const fresh = made(m).slice(made(prev).length);
+  const pts = (e) => (typeById(m, e.scoreTypeId) || { points: 0 }).points;
+  const scored = (fresh.length ? fresh : made(m).slice(-1)).reduce((a, e) => (pts(e) > pts(a) ? e : a));
+  const st = scored && typeById(m, scored.scoreTypeId);
+  const el = document.createElement('div');
+  el.className = `score-flash ${side}`;
+  el.innerHTML = `${esc(st ? st.name : 'Score')}!<small>${esc(teamName(m, side))}</small>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+  if (navigator.vibrate) navigator.vibrate(60);
+}
+
+function watchStatusText() {
+  const m = watch.match;
+  if (watch.status === 'reconnecting') return ['warn', 'Reconnecting…'];
+  if (!m || !watch.msg) return ['', 'Connecting…'];
+  if (m.stopped) return ['warn', 'The scorer stopped live sharing'];
+  if (m.endedAt) return ['', 'Final score'];
+  const age = Date.now() + watch.offset - watch.msg.updatedAt;
+  const mins = Math.floor(age / 60000);
+  if (age > STALE_MS) return ['warn', `Scorer's phone offline – last update ${mins} min ago`];
+  return ['ok', 'Live · up to date'];
+}
+
+function tickWatch() {
+  const m = watch.match;
+  const c = $('#vclock');
+  if (m && c) c.innerHTML = m.endedAt ? 'FT' : fmtMatchClock(m);
+  const st = $('#watch-status');
+  if (st) { const [cls, text] = watchStatusText(); st.className = `watch-status ${cls}`; st.textContent = text; }
+}
+
+function viewWatch(id) {
+  if (!LIVE_API) return `<p class="empty">Live scores aren't available on this copy of Scorecard.</p><button data-go="">Open Scorecard</button>`;
+  if (watch.id !== id) startWatching(id);
+  if (watch.gone) {
+    return `<p class="empty">This live match has finished and expired, or the link is wrong.</p><button data-go="">Open Scorecard</button>`;
+  }
+  const m = watch.match;
+  if (!m) return '<p class="empty">Connecting to live match…</p>';
+  const t = totals(m);
+  const ended = !!m.endedAt;
+  const [cls, statusText] = watchStatusText();
+  const saved = getHistory().some((h) => h.id === m.id);
+  const evs = sortedEvents(m).reverse(); // newest first while watching
+  const bd = (side) => {
+    const lines = breakdown(m, side);
+    return `<div class="card team-card ${side}"><strong class="team-label">${esc(teamName(m, side))}</strong>
+      ${lines.length ? `<ul>${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : '<p class="muted">No scores</p>'}</div>`;
+  };
+  return `
+    <div class="topbar"><span class="live-pill ${ended ? 'ft' : ''}">${ended ? 'Full time' : '● Live'}</span><span class="tag">${esc(m.sport.name)}</span></div>
+    <div class="scoreboard" style="position:static">
+      <div class="team home">${esc(teamName(m, 'home'))}</div><div></div><div class="team away">${esc(teamName(m, 'away'))}</div>
+      <div class="score">${t.home}</div><div class="dash">–</div><div class="score">${t.away}</div>
+      <div class="period-label">${esc(ended ? 'Full time' : m.inBreak ? whistleName(m) : periodName(m))}</div>
+      <div class="clock-row"><span class="clock" id="vclock">${ended ? 'FT' : fmtMatchClock(m)}</span></div>
+    </div>
+    <p class="watch-status ${cls}" id="watch-status">${esc(statusText)}</p>
+    ${ended ? (saved ? `<button data-go="match/${esc(m.id)}">Saved in your history ›</button>` : '<button class="btn-primary" data-action="save-watched">Save to my history</button>') : ''}
+    <h3>Timeline</h3>
+    ${evs.length ? `<ul class="list">${evs.map((e) => eventRow(m, e, null)).join('')}</ul>` : '<p class="empty">No scores yet.</p>'}
+    <h3>Breakdown</h3>
+    <div class="breakdown">${bd('home')}${bd('away')}</div>
+    <button class="btn-ghost" data-go="">Open Scorecard</button>`;
+}
+
 /* Scoreboard, breakdown and timeline: used by match detail and shared-link views. */
 function matchSummary(m) {
   const t = totals(m);
@@ -975,6 +1219,7 @@ const actions = {
     if (!ok || !m) return;
     if (!m.inBreak) blowWhistle(m);
     m.endedAt = Date.now();
+    publishLive(m); // viewers see the final result
     const h = getHistory();
     h.unshift(m);
     store.set('history', h);
@@ -1039,6 +1284,46 @@ const actions = {
     if (el.checked) { armAudio(); beep(); }
   },
   'edit-match'(el) { editMatchForm(el.dataset.ref); },
+  async 'go-live'() {
+    if (!LIVE_API) return toast("Live sharing isn't set up yet");
+    if (!getLive()?.live) {
+      updateLive((m) => { m.live = { id: randomToken(15), key: randomToken(24), since: Date.now() }; });
+      if (navigator.vibrate) navigator.vibrate(40);
+    }
+    await shareLiveLink(getLive());
+  },
+  async 'live-menu'() {
+    const m = getLive();
+    if (!m?.live) return;
+    const statusText = { ok: 'Viewers are up to date.', pending: 'No signal – updates will send when you reconnect.', idle: 'Connecting…' }[livePub.status] || '';
+    openModal(`
+      <h2>Live sharing</h2>
+      <p class="muted">${esc(statusText)}</p>
+      <div class="stack" style="margin-top:14px">
+        <button class="btn-primary" data-modal="share">Share link again</button>
+        <button class="btn-danger" data-modal="stop">Stop live sharing</button>
+        <button class="btn-ghost" data-modal="close">Close</button>
+      </div>`, async (res) => {
+      if (res === 'share') return shareLiveLink(getLive());
+      if (res !== 'stop') return;
+      updateLive((m) => { m.liveStopped = true; });     // last update tells viewers it stopped
+      updateLive((m) => { delete m.live; delete m.liveStopped; });
+      toast('Live sharing stopped');
+    });
+  },
+  'save-watched'() {
+    const m = watch.match;
+    if (!m) return;
+    const copy = clone(m);
+    delete copy.live;
+    const h = getHistory().filter((x) => x.id !== copy.id);
+    h.push(copy);
+    store.set('history', h);
+    sortHistory();
+    rememberTeams([copy.home, copy.away]);
+    toast('Saved to your history');
+    render();
+  },
   async 'share-match'(el) {
     const m = getMatch(el.dataset.id);
     if (m) await shareMatch(m);
@@ -1107,9 +1392,11 @@ document.addEventListener('click', (e) => {
 /* ---------- clock tick ---------- */
 setInterval(() => {
   checkTimeUp();
+  liveHeartbeat();
   const c = $('#clock');
   const m = c && getLive();
   if (m) c.innerHTML = fmtMatchClock(m);
+  if (route()[0] === 'watch') tickWatch();
 }, 500);
 
 /* ---------- boot ---------- */

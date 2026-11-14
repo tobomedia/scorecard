@@ -48,3 +48,30 @@ On the live match screen, a debug panel (scroll below the score buttons) lets yo
 - jump to 10 min over (to trigger the reminder)
 - reset the period
 - test the cue (flash, vibrate, beep)
+
+## Live score sharing (Cloudflare)
+
+`live/` is a small Cloudflare Worker with a Durable Object that relays live scores. The scorer's phone sends the whole match state on every change; viewers on `#/watch/<id>` hold a WebSocket open. Only the phone that started a live match can update it, using a secret key it generated. Matches are deleted 30 days after their last update. It runs on Cloudflare's free plan, which doesn't bill for overage: requests just fail until the daily reset.
+
+### One-time setup
+
+1. Create a free account at dash.cloudflare.com.
+2. In the dashboard, open **Workers & Pages** once and pick a `workers.dev` subdomain if asked.
+3. Go to **My Profile → API Tokens → Create Token** and use the **Edit Cloudflare Workers** template. Account resources: your account. Zone resources: All zones. Copy the token.
+4. Copy your **Account ID**. It's shown on the right of the Workers & Pages overview, or in the URL after `dash.cloudflare.com/`.
+5. In GitHub, go to **Settings → Secrets and variables → Actions → New repository secret** and add:
+   - `CLOUDFLARE_API_TOKEN`: the token
+   - `CLOUDFLARE_ACCOUNT_ID`: the account ID
+6. Run the **Deploy to GitHub Pages** workflow (Actions tab), or push anything.
+
+The workflow deploys the Worker, finds its `https://scorecard-live.<subdomain>.workers.dev` address and builds it into the app. Until the secrets exist, the Worker step is skipped and the Go live button is hidden. To use a custom domain instead, set a repository variable `LIVE_API_URL`.
+
+### Local testing
+
+```bash
+cd live && npm install && npx wrangler dev --port 8787
+```
+
+```bash
+LIVE_API_URL=http://127.0.0.1:8787 node scripts/build.mjs && cd _site && python3 -m http.server 8000
+```

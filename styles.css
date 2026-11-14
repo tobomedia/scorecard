@@ -489,3 +489,67 @@ body.debug::before {
 
 /* ---------- Shared result ---------- */
 .shared-tag { color: var(--lime); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+
+/* ---------- Live score sharing ---------- */
+.live-badge {
+  min-height: 40px;
+  padding: 0 12px;
+  font-size: .95rem;
+  letter-spacing: .06em;
+  color: #fff;
+  border-image: url('assets/paint/fill-red.svg') 30 fill / 10px round;
+  border-width: 10px;
+  animation: livepulse 2s ease-in-out infinite;
+}
+.live-badge[data-status="pending"] { border-image-source: url('assets/paint/fill-grey.svg'); color: #111; animation: none; }
+@keyframes livepulse { 50% { filter: brightness(1.25); } }
+
+.live-pill {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #fff;
+  background: var(--red);
+  padding: 4px 10px;
+  border-radius: 4px;
+  animation: livepulse 2s ease-in-out infinite;
+}
+.live-pill.ft { background: var(--grey); animation: none; }
+
+.watch-status { text-align: center; font-size: .95rem; color: var(--muted); margin: -6px 0 0; }
+.watch-status.ok::before { content: '● '; color: var(--lime); }
+.watch-status.warn { color: #ffb23f; }
+
+.score-flash {
+  position: fixed;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%) rotate(-4deg);
+  z-index: 60;
+  padding: 10px 26px;
+  border: 16px solid transparent;
+  border-image: url('assets/paint/fill-lime.svg') 30 fill / 16px round;
+  color: var(--ink);
+  font-size: 3rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  text-align: center;
+  line-height: 1;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+  animation: scorepop 2.6s ease-out forwards;
+}
+.score-flash.away { border-image-source: url('assets/paint/fill-red.svg'); color: #fff; }
+.score-flash small { font-size: 1.1rem; letter-spacing: .04em; margin-top: 4px; }
+@keyframes scorepop {
+  0% { opacity: 0; transform: translate(-50%, -50%) rotate(-4deg) scale(.4); }
+  12% { opacity: 1; transform: translate(-50%, -50%) rotate(-4deg) scale(1.08); }
+  20% { transform: translate(-50%, -50%) rotate(-4deg) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .score-flash, .live-badge, .live-pill { animation: none; } }
+.topbar button, .topbar .tag { white-space: nowrap; }
+.topbar .tag { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.topbar { gap: 10px; }
