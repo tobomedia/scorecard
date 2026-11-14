@@ -345,7 +345,7 @@ function confirmModal(title, body, okLabel, cancelLabel, danger = false) {
     openModal(`
       <h2>${esc(title)}</h2>
       ${body ? `<p class="muted">${esc(body)}</p>` : ''}
-      <div class="prompt-actions">
+      <div class="prompt-actions${okLabel.length > 12 ? ' stacked' : ''}">
         <button data-modal="cancel">${esc(cancelLabel)}</button>
         <button class="${danger ? 'btn-danger' : 'btn-primary'}" data-modal="ok">${esc(okLabel)}</button>
       </div>`, (res) => resolve(res === 'ok'));

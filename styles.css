@@ -556,3 +556,7 @@ body.debug::before {
 
 /* score buttons look inactive while the clock is stopped (tapping offers to start it) */
 .columns.stopped .score-btn { opacity: .4; filter: saturate(.5); }
+/* long labels: stack the buttons, main action on top */
+dialog .prompt-actions.stacked { grid-template-columns: 1fr; }
+dialog .prompt-actions.stacked > :last-child { order: -1; }
+dialog .prompt-actions.stacked button { white-space: normal; min-height: 64px; font-size: 1.3rem; }
