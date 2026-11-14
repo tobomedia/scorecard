@@ -28,7 +28,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22 # wrangler (Cloudflare deploy tool) needs Node 22+
 
       - name: Deploy live score server (Cloudflare Worker)
         id: live
@@ -54,6 +54,9 @@ jobs:
           [ -z "$url" ] && url="$DEPLOY_URL"
           [ -z "$url" ] && url=$(printf '%s' "$DEPLOY_LOG" | grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' | head -1)
           echo "Live server: ${url:-not found}"
+          if [ -z "$url" ]; then
+            echo "::warning title=Live sharing disabled::Cloudflare Worker deploy failed or its URL wasn't found. The app deployed without live sharing. See the 'Deploy live score server' step."
+          fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Build (hash file names, stamp version)
