@@ -143,6 +143,13 @@ When you watch a match you lose track of the score breakdown, who scored when an
 - The server deletes matches 30 days after their last update. It runs on Cloudflare's free plan.
 - Later: hand scoring over to another phone (a scorer link).
 
+### 6.7d Backup, restore and opening links in the app
+
+- iPhone keeps a home-screen app's data separate from Safari, deletes it when the icon is removed, and always opens links in Safari. So data has to come in from inside the app.
+- **Settings → Back up** saves one `.json` file (matches, sports, teams) via the share sheet, or downloads it where there's no share sheet.
+- **Settings → Restore** picks a backup file and shows what it will add first. It adds matches, sports and teams that aren't already there and never deletes anything, so restoring twice adds nothing.
+- **Open a shared link** (on History and Settings): paste a result or live link, or a whole message containing one, or tap **Paste from clipboard**. It opens inside the app, so **Save to my history** saves to the home-screen app.
+
 ### 6.8 History
 
 - A list of finished matches: date, sport, teams, final score.

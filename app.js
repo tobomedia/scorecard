@@ -542,6 +542,7 @@ function viewHistory() {
   const h = getHistory();
   return `
     <div class="topbar"><button class="btn-ghost btn-small" data-go="">‹ Back</button><h2>History</h2></div>
+    <button data-action="open-link">Open a shared link</button>
     ${h.length ? `<ul class="list">${h.map((m) => {
       const t = totals(m);
       return `<li><button class="list-item" data-go="match/${esc(m.id)}">
@@ -983,6 +984,79 @@ function viewWatch(id) {
     <button class="btn-ghost" data-go="">Open Scorecard</button>`;
 }
 
+/* ---------- backup, restore, open shared link ----------
+   iPhone keeps a home-screen app's data separate from Safari, and links always open in Safari.
+   So data has to come in from inside the app: a backup file, or a pasted link. */
+function buildBackup() {
+  return { app: 'scorecard', v: 1, exportedAt: Date.now(), history: getHistory(), sports: getSports(), teams: getTeams() };
+}
+
+async function saveBackup() {
+  const data = JSON.stringify(buildBackup());
+  const name = `scorecard-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  const file = new File([data], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: 'Scorecard backup' }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a'); // fallback: download
+  a.href = URL.createObjectURL(file);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  toast('Backup saved');
+}
+
+async function restoreBackup(file) {
+  let data;
+  try { data = JSON.parse(await file.text()); } catch { return toast("That file isn't a Scorecard backup"); }
+  if (!data || data.app !== 'scorecard' || !Array.isArray(data.history)) return toast("That file isn't a Scorecard backup");
+  const have = getHistory();
+  const newMatches = data.history.filter((m) => m && m.id && m.sport && Array.isArray(m.events) && !have.some((h) => h.id === m.id));
+  const sports = getSports();
+  const newSports = (data.sports || []).filter((sp) => sp && sp.id && Array.isArray(sp.scoreTypes) && !sports.some((x) => x.id === sp.id));
+  const newTeams = (data.teams || []).filter((t) => typeof t === 'string' && !getTeams().some((x) => x.toLowerCase() === t.toLowerCase()));
+  if (!newMatches.length && !newSports.length && !newTeams.length) return toast('Nothing new in that backup');
+  const ok = await confirmModal('Restore backup?',
+    `Adds ${newMatches.length} match${newMatches.length === 1 ? '' : 'es'}, ${newSports.length} sport${newSports.length === 1 ? '' : 's'} and ${newTeams.length} team${newTeams.length === 1 ? '' : 's'}. Nothing here is deleted.`,
+    'Restore', 'Cancel');
+  if (!ok) return;
+  store.set('history', have.concat(newMatches.map(normaliseMatch)));
+  sortHistory();
+  if (newSports.length) store.set('sports', sports.concat(newSports));
+  rememberTeams(newTeams);
+  toast(`Restored ${newMatches.length} match${newMatches.length === 1 ? '' : 'es'}`);
+  render();
+}
+
+/* pull a #/view/… or #/watch/… route out of whatever was pasted (often a whole message) */
+function routeFromText(text) {
+  const m = String(text || '').match(/#\/(view|watch)\/([A-Za-z0-9_-]+)/);
+  return m ? `${m[1]}/${m[2]}` : null;
+}
+
+function openLinkForm() {
+  openModal(`
+    <h2>Open a shared link</h2>
+    <p class="muted">Copy a Scorecard result or live link from a message, then paste it here.</p>
+    <form id="link-form" class="stack" method="dialog">
+      <input name="link" placeholder="Paste link here" autocomplete="off" autocapitalize="off" spellcheck="false">
+      ${navigator.clipboard?.readText ? '<button type="button" data-action="paste-link">Paste from clipboard</button>' : ''}
+      <div class="row">
+        <button type="button" data-modal="cancel">Cancel</button>
+        <button type="submit" class="btn-primary">Open</button>
+      </div>
+    </form>`, (res) => { if (res && res.route) go(res.route); });
+  const f = $('#link-form');
+  f.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const r = routeFromText(f.elements.link.value);
+    if (!r) return toast("That doesn't look like a Scorecard link");
+    closeModal({ route: r });
+  });
+}
+
 /* Scoreboard, breakdown and timeline: used by match detail and shared-link views. */
 function matchSummary(m) {
   const t = totals(m);
@@ -1024,8 +1098,20 @@ function viewSettings() {
     <h3>Saved teams</h3>
     ${teams.length ? `<ul class="list">${teams.map((t, i) => `
       <li class="list-item"><span class="grow">${esc(t)}</span><button class="btn-small btn-ghost" data-action="delete-team" data-i="${i}" aria-label="Delete ${esc(t)}">✕</button></li>`).join('')}</ul>`
-      : '<p class="muted">Team names you type when starting a match are saved here.</p>'}`;
+      : '<p class="muted">Team names you type when starting a match are saved here.</p>'}
+    <h3>Backup &amp; restore</h3>
+    <p class="muted" style="font-size:.95rem">Saves your matches, sports and teams to a file, e.g. before removing the app from your home screen. Restore adds them back; nothing already here is deleted.</p>
+    <div class="row">
+      <button data-action="backup">Back up</button>
+      <button data-action="restore-pick">Restore</button>
+    </div>
+    <input type="file" id="restore-file" accept=".json,application/json" hidden>
+    <button class="btn-ghost" data-action="open-link">Open a shared link</button>`;
 }
+viewSettings.after = () => {
+  const input = $('#restore-file');
+  if (input) input.addEventListener('change', () => { if (input.files[0]) restoreBackup(input.files[0]); input.value = ''; });
+};
 
 /* sport editor keeps a working draft so add/remove rows don't lose typed input */
 let sportDraft = null;
@@ -1342,6 +1428,19 @@ const actions = {
   async 'share-match'(el) {
     const m = getMatch(el.dataset.id);
     if (m) await shareMatch(m);
+  },
+  backup() { saveBackup(); },
+  'restore-pick'() { $('#restore-file')?.click(); },
+  'open-link'() { openLinkForm(); },
+  async 'paste-link'() {
+    try {
+      const text = await navigator.clipboard.readText();
+      const f = $('#link-form');
+      if (f) f.elements.link.value = text;
+      const r = routeFromText(text);
+      if (r) closeModal({ route: r });
+      else toast("The clipboard doesn't contain a Scorecard link");
+    } catch { toast('Paste into the box instead'); }
   },
   'save-shared'() {
     const m = sharedView.match;
