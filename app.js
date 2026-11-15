@@ -232,7 +232,7 @@ function render() {
   app.innerHTML = view(...args) + `<footer class="app-version" data-action="version-tap">Version ${esc(APP_VERSION)}</footer>`;
   // small tally logo, top-right of every header except Home (which has the big logo)
   const bar = name ? app.querySelector('.topbar') : null;
-  if (bar) bar.insertAdjacentHTML('beforeend', '<img class="header-logo" src="assets/brand/tally.webp" alt="" width="111" height="96">');
+  if (bar) bar.insertAdjacentHTML('beforeend', '<img class="header-logo" src="assets/brand/tally.webp" alt="" width="109" height="96">');
   document.body.classList.toggle('debug', debugOn());
   window.scrollTo(0, 0);
   if (view.after) view.after(...args);
