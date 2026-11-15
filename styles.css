@@ -560,3 +560,10 @@ body.debug::before {
 dialog .prompt-actions.stacked { grid-template-columns: 1fr; }
 dialog .prompt-actions.stacked > :last-child { order: -1; }
 dialog .prompt-actions.stacked button { white-space: normal; min-height: 64px; font-size: 1.3rem; }
+
+/* small tally logo in the header (all screens except Home) */
+.header-logo { height: 40px; width: auto; margin-left: auto; flex: none; pointer-events: none; }
+.topbar .spacer + .header-logo, .topbar .spacer ~ .header-logo { margin-left: 0; }
+/* text-only header buttons don't need the painted-border padding; keeps the top bar on one line on small phones */
+.topbar .btn-ghost { border-width: 0; padding: 0 6px; }
+@media (max-width: 360px) { .header-logo { height: 34px; } .topbar { gap: 6px; } }

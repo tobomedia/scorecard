@@ -47,6 +47,10 @@ const files = [...HASHED, 'index.html', 'manifest.webmanifest', ...listDir('icon
 const swSource = read('sw.js').toString();
 const missing = files.filter((f) => /^(icons|assets)\//.test(f) && !f.endsWith('.txt') && !swSource.includes(`'${f}'`));
 if (missing.length) throw new Error(`build: add these to ASSETS in sw.js: ${missing.join(', ')}`);
+// ...and everything sw.js precaches must exist, or the service worker fails to install.
+const listed = [...swSource.matchAll(/'((?:icons|assets)\/[^']+)'/g)].map((m) => m[1]);
+const ghosts = listed.filter((f) => !files.includes(f));
+if (ghosts.length) throw new Error(`build: sw.js lists files that don't exist: ${ghosts.join(', ')}`);
 for (const f of files.sort()) all.update(f).update(read(f));
 all.update(read('sw.js'));
 const contentHash = all.digest('hex').slice(0, 8);
