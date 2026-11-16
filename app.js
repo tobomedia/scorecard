@@ -208,6 +208,8 @@ function openModal(html, onClose) {
   modal.innerHTML = html;
   modal._onClose = onClose;
   modal.showModal();
+  // focus the dialog itself rather than its first button (iPhone draws a box round a focused button)
+  if (!modal.querySelector('[autofocus]')) { modal.tabIndex = -1; modal.focus({ preventScroll: true }); }
 }
 function closeModal(result) {
   const cb = modal._onClose;
@@ -374,7 +376,7 @@ function confirmModal(title, body, okLabel, cancelLabel, danger = false) {
     openModal(`
       <h2>${esc(title)}</h2>
       ${body ? `<p class="muted">${esc(body)}</p>` : ''}
-      <div class="prompt-actions${okLabel.length > 12 ? ' stacked' : ''}">
+      <div class="prompt-actions${okLabel.length > 12 || okLabel.length + cancelLabel.length > 18 ? ' stacked' : ''}">
         <button data-modal="cancel">${esc(cancelLabel)}</button>
         <button class="${danger ? 'btn-danger' : 'btn-primary'}" data-modal="ok">${esc(okLabel)}</button>
       </div>`, (res) => resolve(res === 'ok'));

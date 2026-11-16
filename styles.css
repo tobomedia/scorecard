@@ -350,8 +350,8 @@ dialog::before { /* red splat on the corner */
 dialog::backdrop { background: rgba(8, 10, 14, .72); }
 dialog h2 { font-size: 1.8rem; margin-bottom: 6px; }
 dialog p.muted { font-size: 1.2rem; }
-dialog .prompt-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 18px 0 20px; }
-dialog .prompt-actions button { min-height: 76px; font-size: 1.5rem; white-space: nowrap; padding: 0 8px; }
+dialog .prompt-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0 20px; }
+dialog .prompt-actions button { min-height: 76px; font-size: 1.5rem; white-space: normal; line-height: 1.1; padding: 0 8px; min-width: 0; overflow-wrap: anywhere; }
 
 .kickoff { display: flex; flex-direction: column; gap: 14px; text-align: center; }
 .kickoff-btn { min-height: 200px; font-size: 2.2rem; line-height: 1.2; border-width: 18px; border-image-width: 18px; }
@@ -689,3 +689,6 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
   color: var(--ink);
   border-image: url('assets/paint/fill-lime.svg') 30 fill / var(--paint) round;
 }
+
+/* the dialog takes focus itself on open, so no button gets a focus ring */
+dialog:focus { outline: none; }
