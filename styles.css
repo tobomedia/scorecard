@@ -567,3 +567,37 @@ dialog .prompt-actions.stacked button { white-space: normal; min-height: 64px; f
 /* text-only header buttons don't need the painted-border padding; keeps the top bar on one line on small phones */
 .topbar .btn-ghost { border-width: 0; padding: 0 6px; }
 @media (max-width: 360px) { .header-logo { height: 34px; } .topbar { gap: 6px; } }
+
+/* ---------- Help & welcome ---------- */
+.help-list { display: flex; flex-direction: column; gap: 10px; }
+.help-item {
+  --fill: var(--surface);
+  background: linear-gradient(var(--fill), var(--fill)) center / calc(100% - var(--paint)) calc(100% - var(--paint)) no-repeat border-box;
+  border: var(--paint) solid transparent;
+  border-image: url('assets/paint/frame-slate.svg') 30 / var(--paint) round;
+}
+.help-item[open] { border-image-source: url('assets/paint/frame-lime.svg'); }
+.help-item.faq[open] { border-image-source: url('assets/paint/frame-white.svg'); }
+.help-item summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 12px 36px 12px 12px;
+  font-weight: 700;
+  font-size: 1.2rem;
+  position: relative;
+}
+.help-item summary::-webkit-details-marker { display: none; }
+.help-item summary::after { content: '+'; position: absolute; right: 12px; top: 8px; font-size: 1.5rem; color: var(--lime); }
+.help-item[open] summary::after { content: '–'; }
+.help-item ul { margin: 0 12px 12px; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; }
+.help-item p { margin: 0 12px 12px; }
+.help-item ul, .help-item p { color: #d6dce6; font-size: 1.05rem; }
+.help-item b { color: var(--text); }
+.help-note { background: #2a3a12; border-left: 4px solid var(--lime); padding: 10px 12px; font-size: 1rem; }
+
+.welcome { text-align: center; }
+.welcome p { font-size: 1.15rem; color: #d6dce6; }
+.welcome b { color: var(--text); }
+.welcome-dots { display: flex; justify-content: center; gap: 8px; margin-bottom: 12px; }
+.welcome-dots span { width: 10px; height: 10px; border-radius: 50%; background: var(--grey); }
+.welcome-dots span.on { background: var(--lime); }

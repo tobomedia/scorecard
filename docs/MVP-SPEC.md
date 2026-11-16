@@ -150,6 +150,14 @@ When you watch a match you lose track of the score breakdown, who scored when an
 - **Settings → Restore** picks a backup file and shows what it will add first. It adds matches, sports and teams that aren't already there and never deletes anything, so restoring twice adds nothing.
 - **Open a shared link** (on History and Settings): paste a result or live link, or a whole message containing one, or tap **Paste from clipboard**. It opens inside the app, so **Save to my history** saves to the home-screen app.
 
+### 6.7e Help, FAQ and welcome
+
+- **Help & FAQ** on the Home screen has 8 guides and 11 FAQs as tap-to-expand sections, and works offline.
+- The same screen is a shareable link (`…/#/help`) that works in any browser. **Share this guide** sends it.
+- The content lives in one place (`HELP` in `app.js`).
+- When not installed, Help shows an install tip for iPhone or Android.
+- **Welcome:** 3 cards on first launch (install / scoring a match / where Help is). It appears on the Home screen only, never over a shared or live link. It's skippable, never shown again, and can be replayed from Help.
+
 ### 6.8 History
 
 - A list of finished matches: date, sport, teams, final score.

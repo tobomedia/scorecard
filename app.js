@@ -222,6 +222,7 @@ const views = {
   settings: viewSettings,
   sport: viewSport,
   view: viewShared,
+  help: viewHelp,
   watch: viewWatch,
 };
 
@@ -255,6 +256,7 @@ function viewHome() {
       <button class="btn-primary btn-big btn-block" data-go="new">New match</button>`}
     <button class="btn-big btn-block btn-paint" data-go="history">History</button>
     <button class="btn-big btn-block btn-paint" data-go="settings">Settings</button>
+    <button class="btn-ghost btn-block" data-go="help">Help &amp; FAQ</button>
     <div class="spacer"></div>
     <p class="muted" style="text-align:center;font-size:.85rem">Add to your home screen to use offline.</p>`;
 }
@@ -1057,6 +1059,126 @@ function openLinkForm() {
   });
 }
 
+/* ---------- help, FAQ and welcome ----------
+   One copy of the content: shown in the app at #/help, and the same link works in any browser
+   for people who haven't installed it. Plain strings with a little inline HTML (<b>, <i>). */
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+const HELP = {
+  guides: [
+    { id: 'install', title: 'Install on your phone', body: [
+      '<b>iPhone:</b> open the app in <b>Safari</b>, tap the <b>Share</b> button, then <b>Add to Home Screen</b>.',
+      '<b>Android:</b> open it in <b>Chrome</b>, tap the <b>⋮</b> menu, then <b>Add to Home screen</b> or <b>Install app</b>.',
+      'Open it from the icon from then on. It works with no signal, and keeps your screen on during a match.',
+    ] },
+    { id: 'match', title: 'Scoring a match', body: [
+      'Tap <b>New match</b>, choose the sport, type the team names (or leave them as Home and Away) and check the <b>periods and minutes</b>, e.g. 2 × 35 for juniors.',
+      'At kick-off tap the big green <b>Start clock</b>. Score buttons only work while the clock runs. If you tap one when it is stopped, you can start the clock and add the score in one go.',
+      'Tap a team’s button when they score. After a <b>try</b> you are asked whether the <b>conversion</b> was made or missed.',
+      'Use <b>Pause</b> for stoppages. Pausing asks you to confirm so a stray tap can’t stop the clock.',
+    ] },
+    { id: 'halves', title: 'Half time and full time', body: [
+      'When a half’s time is up, the screen flashes red, a <b>HALF TIME</b> banner shows, and the phone beeps (and vibrates on Android). The clock keeps counting added time, e.g. 40:00 +2:10.',
+      'When the ref blows, tap the big red <b>Half time</b> button. Then tap <b>Start 2nd half</b> at the restart. The 2nd half always starts at the right time (e.g. 40:00) even if you paused late.',
+      'At the end, tap <b>Full time</b>, or <b>End</b> at the bottom, to save the match to <b>History</b>.',
+      'If the ref blows early, pause the clock and tap <b>End 1st half early</b>.',
+    ] },
+    { id: 'mistakes', title: 'Fixing mistakes', body: [
+      '<b>Undo</b> removes the last score straight away.',
+      '<b>Log</b> lists everything. Tap any entry to change the team, score type or minute, or delete it. <b>+ Add missed event</b> adds a score you missed, at any minute.',
+      '<b>Edit</b> (during a match) or <b>Edit match</b> (in History) changes team names, date and the period length. Changing 40 to 35 minutes moves 2nd-half times to match.',
+    ] },
+    { id: 'share', title: 'Sharing a result', body: [
+      'Open a match in <b>History</b> and tap <b>Share result</b> to send the score and a link, e.g. on WhatsApp.',
+      'Anyone can open the link to see the score, breakdown and timeline. Scorecard users can tap <b>Save to my history</b>.',
+      'On iPhone, links always open in Safari, not the home-screen app. To save one into the app, copy the link, then in the app use <b>History → Open a shared link</b>.',
+    ] },
+    { id: 'live', title: 'Live scores for people not at the game', body: [
+      'During a match tap <b>Go live</b> at the top and send the link. Viewers see the score, a ticking clock and a big flash whenever someone scores.',
+      'The red <b>LIVE</b> badge turns grey when your phone has no signal. Scores you add still count, and viewers catch up when you reconnect.',
+      'Tap the <b>LIVE</b> badge to send the link again or stop sharing. Live links show the final score after full time and are deleted after 30 days.',
+    ] },
+    { id: 'sports', title: 'Sports, scoring and teams', body: [
+      '<b>Settings</b> has Rugby Union (try 5, conversion 2, penalty 3, drop goal 3) and Football (goal 1). Tap one to change its points or periods.',
+      '<b>+ New sport</b> builds your own: name it, set the periods, and add score types. A <b>follow-up</b> (like a conversion after a try) makes the app ask “made or missed?” after that score.',
+      'Team names you type are remembered and suggested next time. Remove old ones in Settings.',
+    ] },
+    { id: 'backup', title: 'Backups and changing phones', body: [
+      'Your matches are stored only on your phone. <b>Settings → Back up</b> saves them, with your sports and teams, to a file. Save it to Files or iCloud, or email it to yourself.',
+      'On a new phone, or after re-adding the app, use <b>Settings → Restore</b> and pick that file. Nothing already there is deleted.',
+    ] },
+  ],
+  faq: [
+    { q: 'Why don’t the score buttons work?', a: 'The clock isn’t running, so the buttons look faded. Tap one and choose <b>Start clock & add score</b>, or tap the green <b>Start clock</b> bar.' },
+    { q: 'Do I need signal at the ground?', a: 'No. Everything works offline except live sharing, and even that catches up when signal comes back.' },
+    { q: 'I removed the app from my home screen. Where are my matches?', a: 'On iPhone, removing the icon deletes its data. Next time, use <b>Settings → Back up</b> first, then <b>Restore</b> after adding it again. Matches you shared can be brought back with <b>Open a shared link</b>.' },
+    { q: 'I opened a shared link but it isn’t in my app.', a: 'On iPhone, links open in Safari, which keeps separate data from the home-screen app. Copy the link and use <b>History → Open a shared link</b> inside the app.' },
+    { q: 'I forgot to change the half length. Can I fix the times?', a: 'Yes. Open the match, tap <b>Edit match</b> and change the minutes. Event times in later halves move to match.' },
+    { q: 'Why didn’t my phone vibrate at half time?', a: 'iPhones don’t allow websites to vibrate. You still get the red flash, banner and beep. Check the beep is on in <b>Settings → Time-up alerts</b> and your phone isn’t on silent.' },
+    { q: 'My screen keeps turning off.', a: 'The app keeps the screen on during a live match. Low Power Mode on iPhone can override this, so turn it off for the match, or raise Auto-Lock in Settings.' },
+    { q: 'Viewers say “scorer’s phone offline”.', a: 'Your phone hasn’t reached the internet for a couple of minutes. Scores still save on your phone and are sent when signal returns.' },
+    { q: 'Can two people score the same match?', a: 'Not yet. Only the phone that tapped <b>Go live</b> can update a live match.' },
+    { q: 'How do I get the latest version?', a: 'When an update is ready, a green <b>New version available</b> bar appears. Tap it. The version number is at the bottom of every screen.' },
+    { q: 'Is my data private?', a: 'Matches stay on your phone. A shared result link carries that match inside the link itself. Live matches pass through our live-score server and are deleted 30 days after the last update. There are no accounts or tracking.' },
+  ],
+};
+
+function viewHelp() {
+  const guides = HELP.guides.map((g) => `
+    <details class="help-item" id="help-${g.id}">
+      <summary>${esc(g.title)}</summary>
+      <ul>${g.body.map((b) => `<li>${b}</li>`).join('')}</ul>
+    </details>`).join('');
+  const faq = HELP.faq.map((f) => `
+    <details class="help-item faq">
+      <summary>${esc(f.q)}</summary>
+      <p>${f.a}</p>
+    </details>`).join('');
+  return `
+    <div class="topbar"><button class="btn-ghost btn-small" data-go="">‹ Home</button><h2>Help</h2></div>
+    ${isStandalone() ? '' : `<p class="help-note">${isIOS()
+      ? 'Tip: add Scorecard to your home screen. Tap <b>Share</b>, then <b>Add to Home Screen</b>.'
+      : 'Tip: install Scorecard from your browser menu (<b>⋮ → Install app</b>) so it works offline.'}</p>`}
+    <h3>Guides</h3>
+    <div class="help-list">${guides}</div>
+    <h3>FAQ</h3>
+    <div class="help-list">${faq}</div>
+    <div class="row">
+      <button data-action="show-welcome">Show welcome again</button>
+      <button data-action="share-help">Share this guide</button>
+    </div>`;
+}
+
+const WELCOME = () => [
+  { title: 'Welcome to Scorecard', body: isStandalone()
+    ? 'Keep score while you watch: rugby, football or your own sport. It works offline and keeps your screen on during a match.'
+    : isIOS()
+      ? 'First, add it to your home screen so it works offline at the ground: tap <b>Share</b> in Safari, then <b>Add to Home Screen</b>, and open it from the icon.'
+      : 'First, install it so it works offline at the ground: tap your browser’s <b>⋮</b> menu, then <b>Install app</b> or <b>Add to Home screen</b>.' },
+  { title: 'Scoring a match', body: 'Tap <b>New match</b>, set the teams and half length, then tap <b>Start clock</b> at kick-off. Tap a team’s button when they score. The app tells you when it’s half time.' },
+  { title: 'Help is always here', body: '<b>Help & FAQ</b> on the Home screen covers fixing mistakes, sharing results, live scores for people at home, and backups.' },
+];
+
+function showWelcome(step = 0) {
+  const cards = WELCOME();
+  const c = cards[step];
+  const last = step === cards.length - 1;
+  openModal(`
+    <div class="welcome">
+      <div class="welcome-dots">${cards.map((_, i) => `<span class="${i === step ? 'on' : ''}"></span>`).join('')}</div>
+      <h2>${c.title}</h2>
+      <p>${c.body}</p>
+      <div class="prompt-actions">
+        <button data-modal="skip">${last ? 'Close' : 'Skip'}</button>
+        <button class="btn-primary" data-modal="${last ? 'done' : 'next'}">${last ? 'Let’s go' : 'Next'}</button>
+      </div>
+    </div>`, (res) => {
+    if (res === 'next') return showWelcome(step + 1);
+    store.set('welcomed', true); // skip, done or tapping outside: never show again
+  });
+}
+
 /* Scoreboard, breakdown and timeline: used by match detail and shared-link views. */
 function matchSummary(m) {
   const t = totals(m);
@@ -1430,6 +1552,12 @@ const actions = {
     if (m) await shareMatch(m);
   },
   backup() { saveBackup(); },
+  'show-welcome'() { showWelcome(0); },
+  async 'share-help'() {
+    const url = `${location.origin}${location.pathname}#/help`;
+    if (navigator.share) { try { await navigator.share({ title: 'Scorecard – help', url }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+    try { await navigator.clipboard.writeText(url); toast('Link copied'); } catch { prompt('Copy this link:', url); }
+  },
   'restore-pick'() { $('#restore-file')?.click(); },
   'open-link'() { openLinkForm(); },
   async 'paste-link'() {
@@ -1540,3 +1668,5 @@ function showUpdateBar() {
 // Version is stamped into index.html at deploy time (see scripts/build.mjs).
 const APP_VERSION = document.querySelector('meta[name=app-version]')?.content || 'dev';
 if (!location.hash && getLive()) go('live'); else render();
+// first launch, on the Home screen only (never over a match or someone's shared/live link)
+if (!store.get('welcomed') && (!location.hash || location.hash === '#/')) setTimeout(() => { if (!route()[0]) showWelcome(); }, 400);
