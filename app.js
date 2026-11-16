@@ -679,7 +679,10 @@ function viewMatch(id) {
   return `
     <div class="topbar"><button class="btn-ghost btn-small" data-go="history">‹ History</button><span class="tag">${esc(m.sport.name)}</span></div>
     ${matchSummary(m)}
-    <button class="btn-primary" data-action="share-match" data-id="${esc(m.id)}">Share result</button>
+    <div class="row">
+      <button class="btn-primary" data-action="share-match" data-id="${esc(m.id)}">Share result</button>
+      <button data-action="copy-match-link" data-id="${esc(m.id)}">Copy link</button>
+    </div>
     <div class="row">
       <button data-action="edit-match" data-ref="${esc(m.id)}">Edit match</button>
       <button data-go="log/${esc(m.id)}">Edit log</button>
@@ -831,6 +834,32 @@ async function decodeMatch(code) {
 }
 
 const shareUrl = (code) => `${location.origin}${location.pathname}#/view/${code}`;
+const matchLink = async (m) => shareUrl(await encodeMatch(m));
+
+/* Share sheet with the link inside the message: on iPhone, "Copy" in the share sheet copies only
+   the text when a separate url is passed, so the link would be lost. */
+async function shareOrCopy(title, text, url, copiedMsg = 'Link copied') {
+  if (navigator.share) {
+    try { await navigator.share({ title, text: `${text}\n${url}` }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  await copyText(`${text}\n${url}`, copiedMsg);
+}
+
+/* Copy just the link. ClipboardItem with a promise keeps iPhone's tap permission while the
+   (compressed) link is still being built. */
+async function copyText(textOrPromise, msg = 'Link copied') {
+  const p = Promise.resolve(textOrPromise);
+  try {
+    if (window.ClipboardItem && navigator.clipboard?.write) {
+      await navigator.clipboard.write([new ClipboardItem({ 'text/plain': p.then((t) => new Blob([t], { type: 'text/plain' })) })]);
+    } else {
+      await navigator.clipboard.writeText(await p);
+    }
+    toast(msg);
+  } catch {
+    prompt('Copy this link:', await p);
+  }
+}
 
 async function shareMatch(m) {
   const t = isGolf(m) || isCricket(m) ? null : totals(m);
@@ -838,11 +867,7 @@ async function shareMatch(m) {
   const url = shareUrl(await encodeMatch(m));
   const when = new Date(m.startedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
   const text = isGolf(m) || isCricket(m) ? `${title}, ${when}` : `${title} · ${m.sport.name}, ${when}`;
-  if (navigator.share) {
-    try { await navigator.share({ title, text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
-  }
-  try { await navigator.clipboard.writeText(`${text}\n${url}`); toast('Link copied'); }
-  catch { prompt('Copy this link:', url); }
+  await shareOrCopy(title, text, url);
 }
 
 /* #/view/<code>: read-only view of a shared match. Decoding is async, so render twice. */
@@ -964,11 +989,7 @@ async function shareLiveLink(m) {
   const who = isGolf(m) ? `the round at ${m.course.name}` : `${teamName(m, 'home')} v ${teamName(m, 'away')}`;
   const title = `${isGolf(m) ? m.course.name : who} – live`;
   const text = `Follow ${who} live`;
-  if (navigator.share) {
-    try { await navigator.share({ title, text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
-  }
-  try { await navigator.clipboard.writeText(`${text}\n${url}`); toast('Live link copied'); }
-  catch { prompt('Copy this live link:', url); }
+  await shareOrCopy(title, text, url, 'Live link copied');
 }
 
 /* ----- viewer ----- */
@@ -1397,7 +1418,10 @@ function viewGolfMatch(m) {
   return `
     <div class="topbar"><button class="btn-ghost btn-small" data-go="history">‹ History</button><span class="tag">Golf</span></div>
     ${golfSummary(m, m.id)}
-    <button class="btn-primary" data-action="share-match" data-id="${esc(m.id)}">Share result</button>
+    <div class="row">
+      <button class="btn-primary" data-action="share-match" data-id="${esc(m.id)}">Share result</button>
+      <button data-action="copy-match-link" data-id="${esc(m.id)}">Copy link</button>
+    </div>
     <button data-action="edit-match" data-ref="${esc(m.id)}">Edit round</button>
     <button class="btn-danger" data-action="delete-match" data-id="${esc(m.id)}">Delete round</button>`;
 }
@@ -1791,7 +1815,10 @@ function viewCricketMatch(m) {
   return `
     <div class="topbar"><button class="btn-ghost btn-small" data-go="history">‹ History</button><span class="tag">Cricket · ${m.overs} overs</span></div>
     ${cricketSummary(m)}
-    <button class="btn-primary" data-action="share-match" data-id="${esc(m.id)}">Share result</button>
+    <div class="row">
+      <button class="btn-primary" data-action="share-match" data-id="${esc(m.id)}">Share result</button>
+      <button data-action="copy-match-link" data-id="${esc(m.id)}">Copy link</button>
+    </div>
     <button data-action="edit-match" data-ref="${esc(m.id)}">Edit match</button>
     <button class="btn-danger" data-action="delete-match" data-id="${esc(m.id)}">Delete match</button>`;
 }
@@ -2389,10 +2416,12 @@ const actions = {
       <p class="muted">${esc(statusText)}</p>
       <div class="stack" style="margin-top:14px">
         <button class="btn-primary" data-modal="share">Share link again</button>
+        <button data-modal="copy">Copy live link</button>
         <button class="btn-danger" data-modal="stop">Stop live sharing</button>
         <button class="btn-ghost" data-modal="close">Close</button>
       </div>`, async (res) => {
       if (res === 'share') return shareLiveLink(getLive());
+      if (res === 'copy') return copyText(watchUrl(getLive().live.id), 'Live link copied');
       if (res !== 'stop') return;
       updateLive((m) => { m.liveStopped = true; });     // last update tells viewers it stopped
       updateLive((m) => { delete m.live; delete m.liveStopped; });
@@ -2411,6 +2440,10 @@ const actions = {
     rememberTeams([copy.home, copy.away]);
     toast('Saved to your history');
     render();
+  },
+  'copy-match-link'(el) {
+    const m = getMatch(el.dataset.id);
+    if (m) copyText(matchLink(m)); // pass the promise: keeps the tap's permission on iPhone
   },
   async 'share-match'(el) {
     const m = getMatch(el.dataset.id);
@@ -2477,8 +2510,7 @@ const actions = {
   'show-welcome'() { showWelcome(0); },
   async 'share-help'() {
     const url = `${location.origin}${location.pathname}#/help`;
-    if (navigator.share) { try { await navigator.share({ title: 'Scorecard – help', url }); return; } catch (e) { if (e.name === 'AbortError') return; } }
-    try { await navigator.clipboard.writeText(url); toast('Link copied'); } catch { prompt('Copy this link:', url); }
+    await shareOrCopy('Scorecard – help', 'How to use Scorecard', url);
   },
   'restore-pick'() { $('#restore-file')?.click(); },
   'open-link'() { openLinkForm(); },
