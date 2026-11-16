@@ -36,7 +36,79 @@ const PRESETS = [
       { id: 'conversion', name: 'Conversion', points: 2, followUpId: null, hidden: true },
       { id: 'penalty', name: 'Penalty', points: 3, followUpId: null, hidden: false },
       { id: 'drop-goal', name: 'Drop goal', points: 3, followUpId: null, hidden: false },
+      { id: 'penalty-try', name: 'Penalty try', points: 7, followUpId: null, hidden: false },
     ],
+  },
+  {
+    id: 'rugby-league',
+    name: 'Rugby League',
+    periods: { count: 2, minutes: 40 },
+    scoreTypes: [
+      { id: 'try', name: 'Try', points: 4, followUpId: 'conversion', hidden: false },
+      { id: 'conversion', name: 'Conversion', points: 2, followUpId: null, hidden: true },
+      { id: 'penalty-goal', name: 'Penalty goal', points: 2, followUpId: null, hidden: false },
+      { id: 'drop-goal', name: 'Drop goal', points: 1, followUpId: null, hidden: false },
+    ],
+  },
+  {
+    id: 'rugby-sevens',
+    name: 'Rugby Sevens',
+    periods: { count: 2, minutes: 7 },
+    scoreTypes: [
+      { id: 'try', name: 'Try', points: 5, followUpId: 'conversion', hidden: false },
+      { id: 'conversion', name: 'Conversion', points: 2, followUpId: null, hidden: true },
+      { id: 'penalty', name: 'Penalty', points: 3, followUpId: null, hidden: false },
+      { id: 'drop-goal', name: 'Drop goal', points: 3, followUpId: null, hidden: false },
+      { id: 'penalty-try', name: 'Penalty try', points: 7, followUpId: null, hidden: false },
+    ],
+  },
+  {
+    id: 'football',
+    name: 'Football',
+    periods: { count: 2, minutes: 45 },
+    scoreTypes: [{ id: 'goal', name: 'Goal', points: 1, followUpId: null, hidden: false }],
+  },
+  {
+    id: 'netball',
+    name: 'Netball',
+    periods: { count: 4, minutes: 15 },
+    scoreTypes: [{ id: 'goal', name: 'Goal', points: 1, followUpId: null, hidden: false }],
+  },
+  {
+    id: 'hockey',
+    name: 'Hockey',
+    periods: { count: 4, minutes: 15 },
+    scoreTypes: [{ id: 'goal', name: 'Goal', points: 1, followUpId: null, hidden: false }],
+  },
+  {
+    id: 'ice-hockey',
+    name: 'Ice hockey',
+    periods: { count: 3, minutes: 20 },
+    scoreTypes: [{ id: 'goal', name: 'Goal', points: 1, followUpId: null, hidden: false }],
+  },
+  {
+    id: 'handball',
+    name: 'Handball',
+    periods: { count: 2, minutes: 30 },
+    scoreTypes: [{ id: 'goal', name: 'Goal', points: 1, followUpId: null, hidden: false }],
+  },
+  {
+    id: 'futsal',
+    name: 'Futsal',
+    periods: { count: 2, minutes: 20 },
+    scoreTypes: [{ id: 'goal', name: 'Goal', points: 1, followUpId: null, hidden: false }],
+  },
+  {
+    id: 'water-polo',
+    name: 'Water polo',
+    periods: { count: 4, minutes: 8 },
+    scoreTypes: [{ id: 'goal', name: 'Goal', points: 1, followUpId: null, hidden: false }],
+  },
+  {
+    id: 'lacrosse',
+    name: 'Lacrosse',
+    periods: { count: 4, minutes: 15 },
+    scoreTypes: [{ id: 'goal', name: 'Goal', points: 1, followUpId: null, hidden: false }],
   },
   {
     id: 'golf',
@@ -45,22 +117,26 @@ const PRESETS = [
     periods: { count: 1, minutes: 1 },
     scoreTypes: [],
   },
-  {
-    id: 'football',
-    name: 'Football',
-    periods: { count: 2, minutes: 45 },
-    scoreTypes: [{ id: 'goal', name: 'Goal', points: 1, followUpId: null, hidden: false }],
-  },
 ];
 
 const DEFAULT_PERIODS = { count: 2, minutes: 40 };
 const getSports = () => {
   let s = store.get('sports');
   if (!s) { s = clone(PRESETS); store.set('sports', s); }
-  if (!s.some((x) => x.id === 'golf') && !store.get('golfAdded')) { // golf added after launch
-    s.splice(1, 0, clone(PRESETS.find((p) => p.id === 'golf')));
+  // presets added after someone installed the app arrive once; ones they deleted don't come back
+  const seen = store.get('presetsSeen') || ['rugby-union', 'football', ...(store.get('golfAdded') ? ['golf'] : [])];
+  const fresh = PRESETS.filter((p) => !seen.includes(p.id) && !s.some((x) => x.id === p.id));
+  if (fresh.length || !store.get('presetsSeen')) {
+    s.push(...clone(fresh));
     store.set('sports', s);
-    store.set('golfAdded', true);
+    store.set('presetsSeen', PRESETS.map((p) => p.id));
+  }
+  // Rugby Union gained a penalty try button
+  const ru = s.find((x) => x.id === 'rugby-union');
+  if (ru && !store.get('penaltyTryAdded')) {
+    if (!ru.scoreTypes.some((t) => t.id === 'penalty-try')) ru.scoreTypes.push({ id: 'penalty-try', name: 'Penalty try', points: 7, followUpId: null, hidden: false });
+    store.set('sports', s);
+    store.set('penaltyTryAdded', true);
   }
   for (const sp of s) { // sports saved before periods existed
     if (!sp.periods) sp.periods = clone((PRESETS.find((p) => p.id === sp.id) || {}).periods || DEFAULT_PERIODS);

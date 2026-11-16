@@ -36,8 +36,13 @@ When you watch a match you lose track of the score breakdown, who scored when an
 ### 6.1 Sports & scoring setup (Settings)
 
 - **Presets:**
-  - **Rugby Union:** Try 5 (follow-up: Conversion), Conversion 2, Penalty 3, Drop goal 3
-  - **Football:** Goal 1
+  - **Rugby Union** (2 × 40): Try 5 (follow-up: Conversion 2), Penalty 3, Drop goal 3, Penalty try 7
+  - **Rugby League** (2 × 40): Try 4 (follow-up: Conversion 2), Penalty goal 2, Drop goal 1
+  - **Rugby Sevens** (2 × 7): Try 5 (follow-up: Conversion 2), Penalty 3, Drop goal 3, Penalty try 7
+  - **Football** (2 × 45): Goal 1
+  - **Goal 1** sports: Netball 4 × 15, Hockey 4 × 15, Ice hockey 3 × 20, Handball 2 × 30, Futsal 2 × 20, Water polo 4 × 8, Lacrosse 4 × 15
+  - **Golf**: stroke play (see 6.7f)
+- Presets added in an update are added once to existing installs. Ones the user deleted aren't re-added.
 - Presets can be edited (rename, change points, add or remove score types).
 - **Custom sport builder:** name the sport, then add score types. Each score type has:
   - Name
