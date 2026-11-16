@@ -683,3 +683,9 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
   .golf-card th.name { min-width: 52px; max-width: 58px; }
   .golf-card .sub { min-width: 28px; }
 }
+/* primary (green) buttons stay green inside the bottom action bar */
+.actionbar button.btn-primary {
+  background: none;
+  color: var(--ink);
+  border-image: url('assets/paint/fill-lime.svg') 30 fill / var(--paint) round;
+}
