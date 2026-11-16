@@ -692,3 +692,44 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
 
 /* the dialog takes focus itself on open, so no button gets a focus ring */
 dialog:focus { outline: none; }
+
+/* ---------- Cricket ---------- */
+.cr-board { grid-template-columns: 1fr; padding: 12px 10px 10px; gap: 2px; }
+.cr-team { font-weight: 700; font-size: 1.4rem; }
+.cr-team.home { color: var(--lime); }
+.cr-team.away { color: var(--red); }
+.cr-score { font-size: 4.2rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.cr-overs { color: #c9d0dc; font-size: 1.1rem; }
+.cr-chase { margin-top: 6px; font-size: 1.1rem; color: var(--text); }
+.cr-chase b { color: var(--lime); }
+.cr-other { color: var(--muted); font-size: 1rem; margin-top: 4px; }
+.cr-result { margin-top: 8px; font-size: 1.3rem; font-weight: 700; color: var(--lime); }
+
+.cr-this { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cr-this > .tag:first-child { margin-right: 4px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
+.ball { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 34px; padding: 0 6px; border-radius: 17px; background: var(--surface-2); font-weight: 700; font-variant-numeric: tabular-nums; }
+.ball.bdry { background: var(--lime); color: var(--ink); }
+.ball.wkt { background: var(--red); color: #fff; }
+.ball.extra { background: #3b3320; color: #ffcf6a; font-size: .9rem; }
+
+.cr-pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.cr-key { min-height: 72px; font-size: 2rem; padding: 0; flex-direction: column; gap: 0; line-height: 1; }
+.cr-key small { font-size: .8rem; font-weight: 400; opacity: .8; }
+.cr-key.bdry { border-image-source: url('assets/paint/fill-lime.svg'); color: var(--ink); }
+.cr-key.wkt { grid-column: span 2; border-image-source: url('assets/paint/fill-red.svg'); color: #fff; font-size: 1.6rem; }
+.cr-key.extra { font-size: 1.15rem; border-image-source: url('assets/paint/fill-steel.svg'); }
+.cr-key.extra:last-child { grid-column: span 2; }
+
+.cr-banner { display: flex; flex-direction: column; gap: 10px; text-align: center; }
+.cr-banner b { font-size: 1.6rem; }
+.cr-pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0 6px; }
+.cr-pick button { min-height: 64px; font-size: 1.6rem; }
+
+.cr-overs-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cr-overs-list li { display: flex; align-items: center; gap: 10px; }
+.cr-overs-list li .tag { min-width: 58px; }
+.cr-overs-list .cr-chips { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; }
+.cr-overs-list .ball { min-width: 28px; height: 28px; font-size: .9rem; }
+.cr-overs-list b { min-width: 2ch; text-align: right; }
+.cr-actions { grid-template-columns: 1fr 1fr; }
+.cr-key.extra { white-space: nowrap; font-size: 1.05rem; padding: 0 2px; }

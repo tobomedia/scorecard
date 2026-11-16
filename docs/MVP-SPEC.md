@@ -177,6 +177,27 @@ When you watch a match you lose track of the score breakdown, who scored when an
 - **Card:** a grid of every hole for every player, with Out/In for 18 holes and a total with ± against par. It marks eagle, birdie, bogey and double bogey or worse. Tapping a score edits it, during or after the round.
 - **Finish** saves to History with a leaderboard (ties shown as T2) and the card. Share result, Go live (a live leaderboard with the current hole) and backup/restore (including courses) all work for golf.
 
+### 6.7g Cricket
+
+- **Cricket** is a limited-overs mode, scoring the team ball by ball with no clock.
+- **New match → Cricket:** team names, overs per side (default 20), wickets (default 10) and who bats first.
+- **Ball pad:** · (dot) 1 2 3 4 6, Wicket, Wide, No-ball, Bye.
+  - **Wide:** 1 run plus any extra runs (it asks), not a legal ball.
+  - **No-ball:** 1 run plus runs off the bat (it asks), not a legal ball.
+  - **Bye/leg-bye:** asks how many runs, and is a legal ball.
+  - **Wicket:** a legal ball with no runs.
+  - **Undo** removes the last ball.
+- **Board:**
+  - the batting team and score (e.g. 87/3), overs (12.4 of 20) and run rate
+  - in the chase: the target, "need X off Y balls" and the required rate
+  - the "this over" chips and the last few overs
+- **Automatic:**
+  - a toast at the end of each over
+  - innings over when the overs run out or the side is all out, with a prompt and then **Start 2nd innings**
+  - the match ends when the target is reached or the 2nd innings is over, with the result worked out ("won by N wickets / N runs / Match tied")
+- **End** finishes early, e.g. for rain.
+- History shows over by over for both innings. Share result and backup work as for other sports. Go live gives viewers FOUR! / SIX! / WICKET! flashes.
+
 ### 6.8 History
 
 - A list of finished matches: date, sport, teams, final score.

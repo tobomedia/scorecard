@@ -111,6 +111,13 @@ const PRESETS = [
     scoreTypes: [{ id: 'goal', name: 'Goal', points: 1, followUpId: null, hidden: false }],
   },
   {
+    id: 'cricket',
+    name: 'Cricket',
+    kind: 'cricket', // limited overs, ball by ball: see the cricket section
+    periods: { count: 1, minutes: 1 },
+    scoreTypes: [],
+  },
+  {
     id: 'golf',
     name: 'Golf',
     kind: 'golf', // stroke play per hole, not team scoring: see the golf section
@@ -366,12 +373,14 @@ function viewNew() {
   const sel = sports.find((s) => s.id === last) || sports[0];
   const teams = getTeams().map((t) => `<option value="${esc(t)}">`).join('');
   const golf = sel && sel.kind === 'golf';
+  const cricket = sel && sel.kind === 'cricket';
   return `
     <div class="topbar"><button class="btn-ghost btn-small" data-go="">‹ Back</button><h2>New match</h2></div>
     <form id="new-form" class="stack">
       <label>Sport<select name="sport">${opts}</select></label>
       <fieldset id="golf-fields" class="stack plain" ${golf ? '' : 'hidden disabled'}>${golfNewFields()}</fieldset>
-      <fieldset id="team-fields" class="stack plain" ${golf ? 'hidden disabled' : ''}>
+      <fieldset id="cricket-fields" class="stack plain" ${cricket ? '' : 'hidden disabled'}>${cricketNewFields()}</fieldset>
+      <fieldset id="team-fields" class="stack plain" ${golf || cricket ? 'hidden disabled' : ''}>
       <label>Home team<input name="home" placeholder="Home" list="teams" autocomplete="off" maxlength="40"></label>
       <label>Away team<input name="away" placeholder="Away" list="teams" autocomplete="off" maxlength="40"></label>
       <datalist id="teams">${teams}</datalist>
@@ -391,9 +400,10 @@ viewNew.after = () => {
     const sp = getSports().find((s) => s.id === f.elements.sport.value);
     if (!sp) return;
     const golf = sp.kind === 'golf';
-    for (const [id, on] of [['#golf-fields', golf], ['#team-fields', !golf]]) { $(id).hidden = !on; $(id).disabled = !on; }
+    const cricket = sp.kind === 'cricket';
+    for (const [id, on] of [['#golf-fields', golf], ['#cricket-fields', cricket], ['#team-fields', !golf && !cricket]]) { $(id).hidden = !on; $(id).disabled = !on; }
     f.querySelector('[type=submit]').textContent = golf ? 'Start round' : 'Start match';
-    if (golf) return;
+    if (golf || cricket) return;
     f.elements.pcount.value = sp.periods.count;
     f.elements.pminutes.value = sp.periods.minutes;
   });
@@ -403,6 +413,7 @@ viewNew.after = () => {
     const sport = getSports().find((s) => s.id === fd.get('sport'));
     if (!sport) return toast('Pick a sport');
     if (sport.kind === 'golf') return startGolfRound(f, sport);
+    if (sport.kind === 'cricket') return startCricket(f, sport);
     const home = fd.get('home').trim();
     const away = fd.get('away').trim();
     rememberTeams([home, away]);
@@ -463,6 +474,7 @@ function viewLive() {
   const m = getLive();
   if (!m) { setTimeout(() => go(''), 0); return ''; }
   if (isGolf(m)) return viewGolf(m);
+  if (isCricket(m)) return viewCricket(m);
   const t = totals(m);
   const buttons = m.sport.scoreTypes.filter((st) => !st.hidden);
   const col = (side) => `
@@ -650,6 +662,7 @@ function viewHistory() {
     <button data-action="open-link">Open a shared link</button>
     ${h.length ? `<ul class="list">${h.map((m) => {
       if (isGolf(m)) return golfHistoryRow(m);
+      if (isCricket(m)) return cricketHistoryRow(m);
       const t = totals(m);
       return `<li><button class="list-item" data-go="match/${esc(m.id)}">
         <span class="grow"><span class="tag">${new Date(m.startedAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} · ${esc(m.sport.name)}</span><br>
@@ -662,6 +675,7 @@ function viewMatch(id) {
   const m = getMatch(id);
   if (!m) { setTimeout(() => go('history'), 0); return ''; }
   if (isGolf(m)) return viewGolfMatch(m);
+  if (isCricket(m)) return viewCricketMatch(m);
   return `
     <div class="topbar"><button class="btn-ghost btn-small" data-go="history">‹ History</button><span class="tag">${esc(m.sport.name)}</span></div>
     ${matchSummary(m)}
@@ -701,6 +715,7 @@ function editMatchForm(ref) {
   const m = getMatch(ref);
   if (!m) return;
   if (isGolf(m)) return editGolfForm(ref);
+  if (isCricket(m)) return editCricketForm(ref);
   const teams = getTeams().map((t) => `<option value="${esc(t)}">`).join('');
   const usedPeriods = Math.max(m.period || 1, ...m.events.map((e) => e.period || 1));
   openModal(`
@@ -774,6 +789,7 @@ async function pipeBytes(bytes, stream) {
 /* compact form: short keys, score types and events as arrays */
 function packMatch(m) {
   if (isGolf(m)) return packGolf(m);
+  if (isCricket(m)) return packCricket(m);
   const types = m.sport.scoreTypes;
   return {
     v: 1, id: m.id, h: m.home, a: m.away, d: m.startedAt, pl: playedMs(m),
@@ -787,6 +803,7 @@ function packMatch(m) {
 function unpackMatch(o) {
   if (!o || o.v !== 1) throw new Error('bad version');
   if (o.k === 'golf') return unpackGolf(o);
+  if (o.k === 'cricket') return unpackCricket(o);
   const types = o.s.t.map(([id, name, points, fu, hidden]) => ({ id: String(id), name: String(name), points: Number(points) || 0, followUpId: fu ? String(fu) : null, hidden: !!hidden }));
   const events = o.e.map((x, i) => (typeof x[0] === 'string'
     ? { id: 'e' + i, marker: x[0] === 't' ? 'timeup' : 'whistle', period: x[1], minute: x[2], team: null, made: false, createdAt: i }
@@ -816,11 +833,11 @@ async function decodeMatch(code) {
 const shareUrl = (code) => `${location.origin}${location.pathname}#/view/${code}`;
 
 async function shareMatch(m) {
-  const t = isGolf(m) ? null : totals(m);
-  const title = isGolf(m) ? golfShareTitle(m) : `${teamName(m, 'home')} ${t.home}–${t.away} ${teamName(m, 'away')}`;
+  const t = isGolf(m) || isCricket(m) ? null : totals(m);
+  const title = isGolf(m) ? golfShareTitle(m) : isCricket(m) ? cricketShareTitle(m) : `${teamName(m, 'home')} ${t.home}–${t.away} ${teamName(m, 'away')}`;
   const url = shareUrl(await encodeMatch(m));
   const when = new Date(m.startedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-  const text = isGolf(m) ? `${title}, ${when}` : `${title} · ${m.sport.name}, ${when}`;
+  const text = isGolf(m) || isCricket(m) ? `${title}, ${when}` : `${title} · ${m.sport.name}, ${when}`;
   if (navigator.share) {
     try { await navigator.share({ title, text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
   }
@@ -868,6 +885,7 @@ const STALE_MS = 150000;              // viewers warn after this long without an
 
 function packLive(m) {
   if (isGolf(m)) return { ...packGolf(m), end: !!m.endedAt, stop: !!m.liveStopped };
+  if (isCricket(m)) return { ...packCricket(m), end: !!m.endedAt, stop: !!m.liveStopped };
   return {
     ...packMatch(m),
     c: { p: m.period, el: elapsedMs(m), run: !!m.clock.runningSince, br: !!m.inBreak },
@@ -959,7 +977,7 @@ const watch = { id: null, ws: null, msg: null, match: null, offset: 0, status: '
 function unpackLive(msg, offset) {
   const st = msg.state;
   const m = unpackMatch(st);
-  if (isGolf(m)) {
+  if (isGolf(m) || isCricket(m)) {
     m.endedAt = st.end ? msg.updatedAt - offset : null;
     m.stopped = !!st.stop;
     return m;
@@ -1026,9 +1044,25 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+/* cricket viewers: FOUR! / SIX! / WICKET! */
+function announceBall(prev, m) {
+  const before = innStats(prev, m.inningsIdx).balls.length;
+  const balls = innStats(m, m.inningsIdx).balls;
+  if (prev.inningsIdx !== m.inningsIdx || balls.length <= before) return;
+  const b = balls[balls.length - 1];
+  const word = b.k === 'w' ? 'Wicket' : b.k === 'run' && b.r === 6 ? 'Six' : b.k === 'run' && b.r === 4 ? 'Four' : null;
+  if (!word) return;
+  const el = document.createElement('div');
+  el.className = `score-flash ${b.k === 'w' ? 'away' : 'home'}`;
+  el.innerHTML = `${word}!<small>${esc(teamName(m, battingSide(m)))}</small>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+
 /* big "TRY!" flash for viewers when a new score arrives */
 function announceScore(prev, m) {
   if (!prev || isGolf(m)) return;
+  if (isCricket(m)) return announceBall(prev, m);
   const before = totals(prev);
   const after = totals(m);
   if (before.home === after.home && before.away === after.away) return;
@@ -1076,6 +1110,7 @@ function viewWatch(id) {
   const m = watch.match;
   if (!m) return '<p class="empty">Connecting to live match…</p>';
   if (isGolf(m)) return viewWatchGolf(m);
+  if (isCricket(m)) return viewWatchCricket(m);
   const t = totals(m);
   const ended = !!m.endedAt;
   const [cls, statusText] = watchStatusText();
@@ -1552,6 +1587,325 @@ viewCourse.after = () => {
   });
 };
 
+/* ---------- cricket ----------
+   Limited overs, team score ball by ball. A match has kind 'cricket', overs and wickets per side,
+   battingFirst ('home'|'away'), innings: [{ balls: [{ k, r }] }] and inningsIdx.
+   Ball kinds: run (r off the bat), wd (wide: 1 + r, re-bowled), nb (no-ball: 1 + r, re-bowled),
+   b (bye/leg-bye: r, legal), w (wicket, legal, no runs). */
+const isCricket = (m) => !!m && (m.kind === 'cricket' || m.sport?.kind === 'cricket');
+const ballRuns = (b) => (b.k === 'wd' || b.k === 'nb' ? 1 : 0) + (b.r || 0);
+const isLegal = (b) => b.k !== 'wd' && b.k !== 'nb';
+const otherSide = (side) => (side === 'home' ? 'away' : 'home');
+const battingSide = (m, i = m.inningsIdx) => (i === 0 ? m.battingFirst : otherSide(m.battingFirst));
+
+function innStats(m, i) {
+  const balls = (m.innings[i] || { balls: [] }).balls;
+  let runs = 0, wkts = 0, legal = 0;
+  for (const b of balls) { runs += ballRuns(b); if (b.k === 'w') wkts += 1; if (isLegal(b)) legal += 1; }
+  return { runs, wkts, legal, balls };
+}
+const fmtOvers = (legal) => `${Math.floor(legal / 6)}.${legal % 6}`;
+const fmtRuns = (st) => `${st.runs}/${st.wkts}`;
+const runRate = (st) => (st.legal ? (st.runs / (st.legal / 6)).toFixed(2) : '0.00');
+
+function inningsOver(m, i = m.inningsIdx) {
+  const st = innStats(m, i);
+  if (st.legal >= m.overs * 6 || st.wkts >= m.wickets) return true;
+  return i === 1 && st.runs > innStats(m, 0).runs; // target reached
+}
+function cricketResult(m) {
+  if (m.inningsIdx < 1) return null;
+  const a = innStats(m, 0), c = innStats(m, 1);
+  const first = m.battingFirst, second = otherSide(first);
+  if (c.runs > a.runs) { const w = m.wickets - c.wkts; return `${teamName(m, second)} won by ${w} wicket${w === 1 ? '' : 's'}`; }
+  if (!inningsOver(m, 1)) return null;
+  if (c.runs === a.runs) return 'Match tied';
+  const r = a.runs - c.runs;
+  return `${teamName(m, first)} won by ${r} run${r === 1 ? '' : 's'}`;
+}
+
+function ballLabel(b) {
+  if (b.k === 'w') return 'W';
+  if (b.k === 'wd') return b.r ? `${b.r + 1}wd` : 'wd';
+  if (b.k === 'nb') return b.r ? `nb${b.r}` : 'nb';
+  if (b.k === 'b') return `${b.r}b`;
+  return b.r === 0 ? '·' : String(b.r);
+}
+const ballChip = (b) => `<span class="ball ${b.k === 'w' ? 'wkt' : b.k === 'run' && b.r >= 4 ? 'bdry' : b.k !== 'run' ? 'extra' : ''}">${esc(ballLabel(b))}</span>`;
+
+/* split an innings into overs (each ends after its 6th legal ball) */
+function oversOf(balls) {
+  const overs = [];
+  let cur = [], legal = 0;
+  for (const b of balls) {
+    cur.push(b);
+    if (isLegal(b) && ++legal % 6 === 0) { overs.push(cur); cur = []; }
+  }
+  if (cur.length) overs.push(cur);
+  return overs;
+}
+const currentOver = (m) => {
+  const st = innStats(m, m.inningsIdx);
+  const ov = oversOf(st.balls);
+  if (!ov.length) return [];
+  // a just-completed over shows as finished, so the new over starts empty
+  return st.legal > 0 && st.legal % 6 === 0 && isLegal(st.balls[st.balls.length - 1]) ? [] : ov[ov.length - 1];
+};
+
+/* New match form fields */
+function cricketNewFields() {
+  return `
+    <label>Home team<input name="chome" placeholder="Home" list="teams" autocomplete="off" maxlength="40"></label>
+    <label>Away team<input name="caway" placeholder="Away" list="teams" autocomplete="off" maxlength="40"></label>
+    <div class="row">
+      <label>Overs per side<input name="covers" type="number" inputmode="numeric" min="1" max="100" value="${store.get('lastOvers', 20)}" required></label>
+      <label>Wickets<input name="cwkts" type="number" inputmode="numeric" min="1" max="10" value="${store.get('lastWkts', 10)}" required></label>
+    </div>
+    <label>Batting first<select name="cfirst"><option value="home">Home team</option><option value="away">Away team</option></select></label>`;
+}
+function startCricket(f, sport) {
+  const home = f.elements.chome.value.trim();
+  const away = f.elements.caway.value.trim();
+  const overs = Math.min(100, Math.max(1, parseInt(f.elements.covers.value, 10) || 20));
+  const wickets = Math.min(10, Math.max(1, parseInt(f.elements.cwkts.value, 10) || 10));
+  rememberTeams([home, away]);
+  store.set('lastSport', sport.id);
+  store.set('lastOvers', overs);
+  store.set('lastWkts', wickets);
+  store.set('live', {
+    id: uid(), kind: 'cricket', sport: clone(sport), home, away, overs, wickets,
+    battingFirst: f.elements.cfirst.value === 'away' ? 'away' : 'home',
+    innings: [{ balls: [] }, { balls: [] }], inningsIdx: 0, startedAt: Date.now(), endedAt: null,
+    clock: { elapsedMs: 0, runningSince: null }, events: [], periods: { count: 1, minutes: 1 }, period: 1, inBreak: false, playedMs: 0, reminded: [],
+  });
+  enterFullscreen();
+  go('live');
+}
+
+/* scoreboard: used by the scorer, viewers and match detail */
+function cricketBoard(m) {
+  const i = m.inningsIdx;
+  const bat = battingSide(m);
+  const st = innStats(m, i);
+  const res = cricketResult(m);
+  let chase = '';
+  if (i === 1 && !res) {
+    const target = innStats(m, 0).runs + 1;
+    const need = target - st.runs;
+    const left = m.overs * 6 - st.legal;
+    chase = `<div class="cr-chase">Target ${target} · need <b>${need}</b> off <b>${left}</b> ball${left === 1 ? '' : 's'}${left ? ` · RRR ${(need / (left / 6)).toFixed(2)}` : ''}</div>`;
+  }
+  const first = innStats(m, 0);
+  return `
+    <div class="scoreboard cr-board" style="position:static">
+      <div class="cr-team ${bat}">${esc(teamName(m, bat))}</div>
+      <div class="cr-score">${fmtRuns(st)}</div>
+      <div class="cr-overs">${fmtOvers(st.legal)} of ${m.overs} overs · RR ${runRate(st)}</div>
+      ${chase}
+      ${i === 1 ? `<div class="cr-other">${esc(teamName(m, m.battingFirst))} ${fmtRuns(first)} (${fmtOvers(first.legal)})</div>` : ''}
+      ${res ? `<div class="cr-result">${esc(res)}</div>` : ''}
+    </div>`;
+}
+
+function viewCricket(m) {
+  const over = inningsOver(m);
+  const res = cricketResult(m);
+  const thisOver = currentOver(m);
+  const st = innStats(m, m.inningsIdx);
+  const pad = `
+    <div class="cr-pad">
+      ${[0, 1, 2, 3, 4, 6].map((r) => `<button class="cr-key ${r >= 4 ? 'bdry' : ''}" data-action="cr-ball" data-k="run" data-r="${r}">${r === 0 ? '·<small>dot</small>' : r}</button>`).join('')}
+      <button class="cr-key wkt" data-action="cr-ball" data-k="w">Wicket</button>
+      <button class="cr-key extra" data-action="cr-extra" data-k="wd">Wide</button>
+      <button class="cr-key extra" data-action="cr-extra" data-k="nb">No-ball</button>
+      <button class="cr-key extra" data-action="cr-extra" data-k="b">Bye</button>
+    </div>`;
+  const done = over
+    ? `<div class="cr-banner">${res ? `<b>${esc(res)}</b><button class="btn-primary btn-big" data-action="cr-finish">Finish match</button>`
+      : `<b>Innings over</b><span>${esc(teamName(m, battingSide(m)))} ${fmtRuns(st)}. ${esc(teamName(m, otherSide(battingSide(m))))} need ${st.runs + 1} to win.</span><button class="btn-primary btn-big" data-action="cr-next-innings">Start 2nd innings</button>`}</div>`
+    : pad;
+  return `
+    <div class="topbar"><button class="btn-ghost btn-small" data-go="">‹ Home</button><span class="tag">Cricket</span><span class="spacer"></span>${liveButton(m)}<button class="btn-ghost btn-small" data-action="edit-match" data-ref="live">Edit</button></div>
+    ${cricketBoard(m)}
+    <div class="cr-this"><span class="tag">This over</span>${thisOver.length ? thisOver.map(ballChip).join('') : '<span class="tag">–</span>'}</div>
+    ${done}
+    ${cricketOversList(m, m.inningsIdx, 4)}
+    <div class="actionbar cr-actions">
+      <button data-action="cr-undo" ${m.innings[0].balls.length ? '' : 'disabled'}>Undo</button>
+      <button class="btn-danger" data-action="cr-end">End</button>
+    </div>`;
+}
+
+function cricketOversList(m, i, limit) {
+  const ov = oversOf(innStats(m, i).balls);
+  if (!ov.length) return '';
+  const rows = ov.map((o, n) => ({ n: n + 1, o })).reverse().slice(0, limit || ov.length);
+  return `<ul class="cr-overs-list">${rows.map(({ n, o }) => `
+    <li><span class="tag">Over ${n}</span><span class="cr-chips">${o.map(ballChip).join('')}</span><b>${o.reduce((t, b) => t + ballRuns(b), 0)}</b></li>`).join('')}</ul>`;
+}
+
+/* asks how many runs for an extra, then records it */
+function cricketExtra(k) {
+  const opts = { wd: [0, 1, 2, 3, 4], nb: [0, 1, 2, 3, 4, 6], b: [1, 2, 3, 4] }[k];
+  const title = { wd: 'Wide', nb: 'No-ball', b: 'Byes' }[k];
+  const help = { wd: '1 run for the wide. Any extra runs run?', nb: '1 run for the no-ball. Runs off the bat?', b: 'How many byes / leg-byes?' }[k];
+  openModal(`
+    <h2>${title}</h2><p class="muted">${help}</p>
+    <div class="cr-pick">${opts.map((r) => `<button class="${k === 'b' && r === 1 || k !== 'b' && r === 0 ? 'btn-primary' : ''}" data-modal="${r}">${k === 'b' ? r : `+${r}`}</button>`).join('')}</div>`,
+  (res) => { const r = Number(res); if (Number.isFinite(r) && res !== 'dismiss') cricketBall(k, r); });
+}
+
+function cricketBall(k, r = 0) {
+  const before = getLive();
+  if (!before || inningsOver(before)) return;
+  const legalBefore = innStats(before, before.inningsIdx).legal;
+  updateLive((m) => m.innings[m.inningsIdx].balls.push({ k, r }));
+  if (navigator.vibrate) navigator.vibrate(k === 'w' ? [60, 40, 60] : 20);
+  const m = getLive();
+  const st = innStats(m, m.inningsIdx);
+  if (inningsOver(m)) {
+    const res = cricketResult(m);
+    cue();
+    openModal(`<h2>${res ? esc(res) : 'Innings over'}</h2>
+      <p class="muted">${esc(teamName(m, battingSide(m)))} ${fmtRuns(st)} (${fmtOvers(st.legal)} overs).${res ? '' : ` ${esc(teamName(m, otherSide(battingSide(m))))} need ${st.runs + 1} to win.`}</p>
+      <div class="prompt-actions stacked"><button data-modal="ok">OK</button></div>`);
+  } else if (st.legal !== legalBefore && st.legal % 6 === 0) {
+    const ov = oversOf(st.balls);
+    toast(`End of over ${st.legal / 6} · ${ov[ov.length - 1].reduce((t, b) => t + ballRuns(b), 0)} runs`);
+  }
+}
+
+/* match detail, shared result and viewers */
+function cricketSummary(m) {
+  const inn = [0, 1].filter((i) => i === 0 || m.inningsIdx >= 1);
+  return `
+    ${cricketBoard(m)}
+    ${inn.map((i) => {
+      const st = innStats(m, i);
+      return `<h3>${esc(teamName(m, battingSide(m, i)))} ${fmtRuns(st)}</h3>
+        <p class="tag">${fmtOvers(st.legal)} overs · run rate ${runRate(st)} · extras ${st.balls.filter((b) => b.k !== 'run').reduce((t, b) => t + (b.k === 'w' ? 0 : ballRuns(b)), 0)}</p>
+        ${cricketOversList(m, i) || '<p class="empty">No balls bowled.</p>'}`;
+    }).join('')}`;
+}
+function viewCricketMatch(m) {
+  return `
+    <div class="topbar"><button class="btn-ghost btn-small" data-go="history">‹ History</button><span class="tag">Cricket · ${m.overs} overs</span></div>
+    ${cricketSummary(m)}
+    <button class="btn-primary" data-action="share-match" data-id="${esc(m.id)}">Share result</button>
+    <button data-action="edit-match" data-ref="${esc(m.id)}">Edit match</button>
+    <button class="btn-danger" data-action="delete-match" data-id="${esc(m.id)}">Delete match</button>`;
+}
+function cricketHistoryRow(m) {
+  const a = innStats(m, 0), c = innStats(m, 1);
+  const f = m.battingFirst, s2 = otherSide(f);
+  return `<li><button class="list-item" data-go="match/${esc(m.id)}">
+    <span class="grow"><span class="tag">${new Date(m.startedAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} · Cricket</span><br>
+    ${esc(teamName(m, f))} <span class="big-score">${fmtRuns(a)}</span> v ${esc(teamName(m, s2))} <span class="big-score">${m.inningsIdx ? fmtRuns(c) : '–'}</span>
+    ${cricketResult(m) ? `<br><span class="tag">${esc(cricketResult(m))}</span>` : ''}</span>
+    <span class="tag">›</span></button></li>`;
+}
+function cricketShareTitle(m) {
+  const a = innStats(m, 0), c = innStats(m, 1);
+  const res = cricketResult(m);
+  return `${teamName(m, m.battingFirst)} ${fmtRuns(a)} v ${teamName(m, otherSide(m.battingFirst))} ${m.inningsIdx ? fmtRuns(c) : ''}${res ? ` – ${res}` : ''}`;
+}
+function viewWatchCricket(m) {
+  const ended = !!m.endedAt;
+  const [cls, statusText] = watchStatusText();
+  const saved = getHistory().some((h) => h.id === m.id);
+  const thisOver = currentOver(m);
+  return `
+    <div class="topbar"><span class="live-pill ${ended ? 'ft' : ''}">${ended ? 'Finished' : '● Live'}</span><span class="tag">Cricket · ${m.overs} overs</span></div>
+    <p class="watch-status ${cls}" id="watch-status">${esc(ended ? 'Final score' : statusText)}</p>
+    ${cricketBoard(m)}
+    ${ended ? '' : `<div class="cr-this"><span class="tag">This over</span>${thisOver.length ? thisOver.map(ballChip).join('') : '<span class="tag">–</span>'}</div>`}
+    ${ended ? (saved ? `<button data-go="match/${esc(m.id)}">Saved in your history ›</button>` : '<button class="btn-primary" data-action="save-watched">Save to my history</button>') : ''}
+    ${[m.inningsIdx, ...(m.inningsIdx ? [0] : [])].map((i) => `<h3>${esc(teamName(m, battingSide(m, i)))} ${fmtRuns(innStats(m, i))}</h3>${cricketOversList(m, i) || ''}`).join('')}
+    <button class="btn-ghost" data-go="">Open Scorecard</button>`;
+}
+
+async function finishCricket(early) {
+  const m = getLive();
+  if (!m) return;
+  if (early) {
+    const ok = await confirmModal('End the match now?', cricketResult(m) || 'The innings isn’t finished. The score so far is saved to History.', 'End match', 'Keep playing', true);
+    if (!ok) return;
+  }
+  const m2 = getLive();
+  m2.endedAt = Date.now();
+  publishLive(m2);
+  const h = getHistory();
+  h.unshift(m2);
+  store.set('history', h);
+  store.del('live');
+  setWakeLock(false);
+  exitFullscreen();
+  go('match/' + m2.id);
+}
+
+/* compact form for links and live sharing: balls as short codes */
+const BALL_CODE = { run: '', wd: 'w', nb: 'n', b: 'b' };
+function packCricket(m) {
+  const enc = (b) => (b.k === 'w' ? 'W' : `${BALL_CODE[b.k]}${b.r || 0}`);
+  return {
+    v: 1, k: 'cricket', id: m.id, d: m.startedAt, h: m.home, a: m.away, o: m.overs, wk: m.wickets,
+    bf: m.battingFirst === 'away' ? 1 : 0, ii: m.inningsIdx, i: m.innings.map((inn) => inn.balls.map(enc).join(',')),
+  };
+}
+function unpackCricket(o) {
+  const dec = (c) => {
+    if (c === 'W') return { k: 'w', r: 0 };
+    const k = { w: 'wd', n: 'nb', b: 'b' }[c[0]] || 'run';
+    return { k, r: Number(k === 'run' ? c : c.slice(1)) || 0 };
+  };
+  return {
+    id: String(o.id), kind: 'cricket', sport: { id: 'cricket', name: 'Cricket', kind: 'cricket', scoreTypes: [], periods: { count: 1, minutes: 1 } },
+    home: String(o.h || ''), away: String(o.a || ''), overs: Number(o.o) || 20, wickets: Number(o.wk) || 10,
+    battingFirst: o.bf ? 'away' : 'home', inningsIdx: Number(o.ii) || 0,
+    innings: (o.i || ['', '']).map((str) => ({ balls: str ? String(str).split(',').map(dec) : [] })),
+    startedAt: Number(o.d), endedAt: Number(o.d),
+    clock: { elapsedMs: 0, runningSince: null }, events: [], periods: { count: 1, minutes: 1 }, period: 1, inBreak: true, playedMs: 0, reminded: [],
+  };
+}
+
+/* edit: team names, overs, wickets, date */
+function editCricketForm(ref) {
+  const m = getMatch(ref);
+  openModal(`
+    <h2>Edit match</h2>
+    <form id="cr-edit" class="stack" method="dialog">
+      <label>Home team<input name="home" value="${esc(m.home)}" placeholder="Home" list="teams-edit" maxlength="40"></label>
+      <label>Away team<input name="away" value="${esc(m.away)}" placeholder="Away" list="teams-edit" maxlength="40"></label>
+      <datalist id="teams-edit">${getTeams().map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
+      <div class="row">
+        <label>Overs per side<input name="overs" type="number" inputmode="numeric" min="1" max="100" value="${m.overs}" required></label>
+        <label>Wickets<input name="wkts" type="number" inputmode="numeric" min="1" max="10" value="${m.wickets}" required></label>
+      </div>
+      <label>Date &amp; start<input name="date" type="datetime-local" value="${toLocalInput(m.startedAt)}" required></label>
+      <div class="row"><button type="button" data-modal="cancel">Cancel</button><button type="submit" class="btn-primary">Save</button></div>
+    </form>`, (res) => {
+    if (!res || typeof res !== 'object') return;
+    const m2 = getMatch(ref);
+    Object.assign(m2, res);
+    saveMatch(ref, m2);
+    rememberTeams([res.home, res.away]);
+    if (ref !== 'live') sortHistory();
+    toast('Match updated');
+    render();
+  });
+  const f = $('#cr-edit');
+  f.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const when = new Date(f.elements.date.value).getTime();
+    closeModal({
+      home: f.elements.home.value.trim(), away: f.elements.away.value.trim(),
+      overs: Math.min(100, Math.max(1, parseInt(f.elements.overs.value, 10) || m.overs)),
+      wickets: Math.min(10, Math.max(1, parseInt(f.elements.wkts.value, 10) || m.wickets)),
+      startedAt: Number.isFinite(when) ? when : m.startedAt,
+    });
+  });
+}
+
 /* ---------- help, FAQ and welcome ----------
    One copy of the content: shown in the app at #/help, and the same link works in any browser
    for people who haven't installed it. Plain strings with a little inline HTML (<b>, <i>). */
@@ -1596,6 +1950,13 @@ const HELP = {
       '<b>Settings</b> has Rugby Union (try 5, conversion 2, penalty 3, drop goal 3) and Football (goal 1). Tap one to change its points or periods.',
       '<b>+ New sport</b> builds your own: name it, set the periods, and add score types. A <b>follow-up</b> (like a conversion after a try) makes the app ask “made or missed?” after that score.',
       'Team names you type are remembered and suggested next time. Remove old ones in Settings.',
+    ] },
+    { id: 'cricket', title: 'Cricket', body: [
+      '<b>New match → Cricket</b>: team names, overs per side, wickets and who bats first.',
+      'Tap a button for every ball: <b>· (dot) 1 2 3 4 6</b> or <b>Wicket</b>. <b>Wide</b> and <b>No-ball</b> add 1 run, ask for any extra runs, and are re-bowled. <b>Bye</b> asks how many byes or leg-byes.',
+      'The board shows the score (e.g. 87/3), overs, run rate and this over. In the chase it shows the target and <b>need X off Y balls</b>.',
+      'The innings ends by itself when the overs run out or the side is all out. Tap <b>Start 2nd innings</b>. The match ends when the target is reached or the overs run out, with the result worked out for you.',
+      '<b>Undo</b> removes the last ball. <b>End</b> stops a match early, e.g. for rain.',
     ] },
     { id: 'golf', title: 'Golf rounds', body: [
       'Add your courses in <b>Settings → Golf courses</b>: name, 9 or 18 holes, and each hole’s par. No course set up? Pick a <b>Quick round</b> (par 4 on every hole).',
@@ -1683,6 +2044,7 @@ function showWelcome(step = 0) {
 /* Scoreboard, breakdown and timeline: used by match detail and shared-link views. */
 function matchSummary(m) {
   if (isGolf(m)) return golfSummary(m, null);
+  if (isCricket(m)) return cricketSummary(m);
   const t = totals(m);
   const bd = (side) => {
     const lines = breakdown(m, side);
@@ -1709,7 +2071,7 @@ function viewSettings() {
   return `
     <div class="topbar"><button class="btn-ghost btn-small" data-go="">‹ Back</button><h2>Settings</h2></div>
     <h3>Sports &amp; scoring</h3>
-    <ul class="list">${sports.filter((s) => s.kind !== 'golf').map((s) => `
+    <ul class="list">${sports.filter((s) => !s.kind).map((s) => `
       <li><button class="list-item" data-go="sport/${esc(s.id)}">
         <span class="grow">${esc(s.name)}<br><span class="tag">${s.periods.count} × ${s.periods.minutes} min · ${s.scoreTypes.map((t) => `${esc(t.name)} ${t.points}`).join(' · ')}</span></span>
         <span class="tag">Edit ›</span></button></li>`).join('')}
@@ -2054,6 +2416,23 @@ const actions = {
     const m = getMatch(el.dataset.id);
     if (m) await shareMatch(m);
   },
+  'cr-ball'(el) { cricketBall(el.dataset.k, Number(el.dataset.r) || 0); },
+  'cr-extra'(el) { cricketExtra(el.dataset.k); },
+  'cr-undo'() {
+    const m = getLive();
+    if (!m) return;
+    if (m.inningsIdx === 1 && !m.innings[1].balls.length) { updateLive((x) => { x.inningsIdx = 0; }); return toast('Back to 1st innings'); }
+    const b = m.innings[m.inningsIdx].balls.slice(-1)[0];
+    if (!b) return;
+    updateLive((x) => x.innings[x.inningsIdx].balls.pop());
+    toast(`Undid ${ballLabel(b) === '·' ? 'dot ball' : ballLabel(b)}`);
+  },
+  'cr-next-innings'() {
+    updateLive((m) => { m.inningsIdx = 1; });
+    toast(`${teamName(getLive(), battingSide(getLive()))} batting`);
+  },
+  async 'cr-finish'() { await finishCricket(false); },
+  async 'cr-end'() { await finishCricket(true); },
   'golf-add-player'() { addPlayerInput(); },
   'golf-step'(el) {
     updateLive((m) => {
