@@ -601,3 +601,85 @@ dialog .prompt-actions.stacked button { white-space: normal; min-height: 64px; f
 .welcome-dots { display: flex; justify-content: center; gap: 8px; margin-bottom: 12px; }
 .welcome-dots span { width: 10px; height: 10px; border-radius: 50%; background: var(--grey); }
 .welcome-dots span.on { background: var(--lime); }
+
+/* ---------- Golf ---------- */
+[hidden] { display: none !important; }
+fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
+
+.golf-hole { grid-template-columns: 1fr 1fr; gap: 6px; padding: 12px; }
+.golf-hole-no { font-size: 1.4rem; text-align: left; }
+.golf-hole-no b { font-size: 3.4rem; line-height: 1; margin: 0 4px; }
+.golf-hole-no small { color: var(--muted); font-size: 1rem; }
+.golf-par { font-size: 1.4rem; text-align: right; color: #c9d0dc; }
+.golf-par b { font-size: 2.6rem; color: var(--lime); }
+.golf-jump { grid-column: 1 / -1; min-height: 44px; font-size: 1rem; }
+.golf-leader { text-align: center; color: var(--muted); margin: -4px 0 0; }
+.golf-leader b { color: var(--text); }
+
+.golf-rows { display: flex; flex-direction: column; gap: 10px; }
+.golf-row {
+  --fill: var(--surface);
+  background: linear-gradient(var(--fill), var(--fill)) center / calc(100% - var(--paint)) calc(100% - var(--paint)) no-repeat border-box;
+  border: var(--paint) solid transparent;
+  border-image: url('assets/paint/frame-slate.svg') 30 / var(--paint) round;
+  display: grid;
+  grid-template-columns: 1fr 64px 56px 64px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+}
+.golf-who { display: flex; flex-direction: column; min-width: 0; }
+.golf-who strong { font-size: 1.25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.golf-step { min-height: 60px; font-size: 2rem; padding: 0; border-image-source: url('assets/paint/fill-steel.svg'); }
+.golf-step[data-d="1"] { border-image-source: url('assets/paint/fill-lime.svg'); color: var(--ink); }
+.golf-strokes { text-align: center; font-size: 2.4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.golf-strokes.suggested { color: var(--grey); }
+.golf-actions { grid-template-columns: 1fr 1fr 1.6fr; }
+.golf-actions button { min-height: 64px; font-size: 1.3rem; }
+
+/* score colours: card and hole screen */
+.eagle, .birdie, .bogey, .double { display: inline-block; min-width: 1.6em; line-height: 1.5em; text-align: center; }
+.eagle { background: var(--lime); color: var(--ink); border-radius: 50%; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--lime); }
+.birdie { border: 2px solid var(--lime); border-radius: 50%; color: var(--lime); }
+.bogey { border: 2px solid #ff8a7a; color: #ff8a7a; }
+.double { background: var(--red); color: #fff; }
+.golf-strokes.birdie, .golf-strokes.eagle, .golf-strokes.bogey, .golf-strokes.double { border: 0; box-shadow: none; background: none; min-width: 0; }
+.golf-strokes.eagle, .golf-strokes.birdie { color: var(--lime); }
+.golf-strokes.bogey { color: #ff8a7a; }
+.golf-strokes.double { color: var(--red); }
+
+.golf-card-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -16px; padding-left: 16px; }
+.golf-card { border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 1rem; }
+.golf-card th, .golf-card td { padding: 4px 1px; text-align: center; min-width: 26px; border-bottom: 1px solid #2c3647; }
+.golf-card th.name { text-align: left; min-width: 60px; max-width: 76px; padding-right: 8px; position: sticky; left: -16px; background: var(--bg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.golf-card thead th { color: var(--muted); font-weight: 700; }
+.golf-card .sub { font-weight: 700; background: #1d2633; min-width: 32px; }
+.golf-card .par-row td, .golf-card .par-row th { color: var(--muted); }
+.golf-card .cell { min-height: 36px; min-width: 26px; padding: 0; border: 0; border-image: none; background: none; font-size: 1rem; font-weight: 400; }
+.golf-key { font-size: .9rem; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+.golf-head { grid-template-columns: 1fr; padding: 12px; }
+.golf-course { font-size: 1.6rem; font-weight: 700; }
+.golf-board { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.golf-board li { display: flex; align-items: center; gap: 12px; padding: 8px 12px; }
+.golf-board li.leader { border-image-source: url('assets/paint/frame-lime.svg'); }
+.golf-board .pos { font-size: 1.4rem; font-weight: 700; width: 1.4em; color: var(--muted); }
+.golf-board li.leader .pos { color: var(--lime); }
+.golf-total { font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.golf-topar { font-size: 1.3rem; font-weight: 700; min-width: 2.6em; text-align: right; }
+.golf-topar.under { color: var(--lime); }
+.golf-topar.over { color: #ff8a7a; }
+
+.par-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; }
+.par-grid label { align-items: center; font-size: .95rem; }
+.par-grid select { min-height: 48px; padding: 0 6px; text-align: center; }
+.golf-card .tot { line-height: 1.1; }
+.golf-card .tot small { display: block; font-size: .75rem; }
+.golf-card .tot small.under { color: var(--lime); }
+.golf-card .tot small.over { color: #ff8a7a; }
+@media (max-width: 360px) {
+  .golf-card { font-size: .9rem; }
+  .golf-card th, .golf-card td, .golf-card .cell { min-width: 22px; }
+  .golf-card th.name { min-width: 52px; max-width: 58px; }
+  .golf-card .sub { min-width: 28px; }
+}

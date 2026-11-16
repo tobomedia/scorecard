@@ -39,6 +39,13 @@ const PRESETS = [
     ],
   },
   {
+    id: 'golf',
+    name: 'Golf',
+    kind: 'golf', // stroke play per hole, not team scoring: see the golf section
+    periods: { count: 1, minutes: 1 },
+    scoreTypes: [],
+  },
+  {
     id: 'football',
     name: 'Football',
     periods: { count: 2, minutes: 45 },
@@ -50,6 +57,11 @@ const DEFAULT_PERIODS = { count: 2, minutes: 40 };
 const getSports = () => {
   let s = store.get('sports');
   if (!s) { s = clone(PRESETS); store.set('sports', s); }
+  if (!s.some((x) => x.id === 'golf') && !store.get('golfAdded')) { // golf added after launch
+    s.splice(1, 0, clone(PRESETS.find((p) => p.id === 'golf')));
+    store.set('sports', s);
+    store.set('golfAdded', true);
+  }
   for (const sp of s) { // sports saved before periods existed
     if (!sp.periods) sp.periods = clone((PRESETS.find((p) => p.id === sp.id) || {}).periods || DEFAULT_PERIODS);
   }
@@ -222,6 +234,8 @@ const views = {
   settings: viewSettings,
   sport: viewSport,
   view: viewShared,
+  card: viewGolfCard,
+  course: viewCourse,
   help: viewHelp,
   watch: viewWatch,
 };
@@ -273,10 +287,13 @@ function viewNew() {
   const opts = sports.map((s) => `<option value="${esc(s.id)}" ${s.id === last ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
   const sel = sports.find((s) => s.id === last) || sports[0];
   const teams = getTeams().map((t) => `<option value="${esc(t)}">`).join('');
+  const golf = sel && sel.kind === 'golf';
   return `
     <div class="topbar"><button class="btn-ghost btn-small" data-go="">‹ Back</button><h2>New match</h2></div>
     <form id="new-form" class="stack">
       <label>Sport<select name="sport">${opts}</select></label>
+      <fieldset id="golf-fields" class="stack plain" ${golf ? '' : 'hidden disabled'}>${golfNewFields()}</fieldset>
+      <fieldset id="team-fields" class="stack plain" ${golf ? 'hidden disabled' : ''}>
       <label>Home team<input name="home" placeholder="Home" list="teams" autocomplete="off" maxlength="40"></label>
       <label>Away team<input name="away" placeholder="Away" list="teams" autocomplete="off" maxlength="40"></label>
       <datalist id="teams">${teams}</datalist>
@@ -284,15 +301,21 @@ function viewNew() {
         <label>Periods<input name="pcount" type="number" inputmode="numeric" min="1" max="8" value="${sel ? sel.periods.count : 2}" required></label>
         <label>Minutes each<input name="pminutes" type="number" inputmode="numeric" min="1" max="120" value="${sel ? sel.periods.minutes : 40}" required></label>
       </div>
-      <button class="btn-primary btn-big" type="submit">Start match</button>
+      </fieldset>
+      <button class="btn-primary btn-big" type="submit">${golf ? 'Start round' : 'Start match'}</button>
     </form>`;
 }
 viewNew.after = () => {
   const f = $('#new-form');
   if (!f) return;
+  golfNewFieldsAfter(f);
   f.elements.sport.addEventListener('change', () => { // reset periods to the sport's default
     const sp = getSports().find((s) => s.id === f.elements.sport.value);
     if (!sp) return;
+    const golf = sp.kind === 'golf';
+    for (const [id, on] of [['#golf-fields', golf], ['#team-fields', !golf]]) { $(id).hidden = !on; $(id).disabled = !on; }
+    f.querySelector('[type=submit]').textContent = golf ? 'Start round' : 'Start match';
+    if (golf) return;
     f.elements.pcount.value = sp.periods.count;
     f.elements.pminutes.value = sp.periods.minutes;
   });
@@ -301,6 +324,7 @@ viewNew.after = () => {
     const fd = new FormData(f);
     const sport = getSports().find((s) => s.id === fd.get('sport'));
     if (!sport) return toast('Pick a sport');
+    if (sport.kind === 'golf') return startGolfRound(f, sport);
     const home = fd.get('home').trim();
     const away = fd.get('away').trim();
     rememberTeams([home, away]);
@@ -360,6 +384,7 @@ function confirmModal(title, body, okLabel, cancelLabel, danger = false) {
 function viewLive() {
   const m = getLive();
   if (!m) { setTimeout(() => go(''), 0); return ''; }
+  if (isGolf(m)) return viewGolf(m);
   const t = totals(m);
   const buttons = m.sport.scoreTypes.filter((st) => !st.hidden);
   const col = (side) => `
@@ -546,6 +571,7 @@ function viewHistory() {
     <div class="topbar"><button class="btn-ghost btn-small" data-go="">‹ Back</button><h2>History</h2></div>
     <button data-action="open-link">Open a shared link</button>
     ${h.length ? `<ul class="list">${h.map((m) => {
+      if (isGolf(m)) return golfHistoryRow(m);
       const t = totals(m);
       return `<li><button class="list-item" data-go="match/${esc(m.id)}">
         <span class="grow"><span class="tag">${new Date(m.startedAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} · ${esc(m.sport.name)}</span><br>
@@ -557,6 +583,7 @@ function viewHistory() {
 function viewMatch(id) {
   const m = getMatch(id);
   if (!m) { setTimeout(() => go('history'), 0); return ''; }
+  if (isGolf(m)) return viewGolfMatch(m);
   return `
     <div class="topbar"><button class="btn-ghost btn-small" data-go="history">‹ History</button><span class="tag">${esc(m.sport.name)}</span></div>
     ${matchSummary(m)}
@@ -595,6 +622,7 @@ const toLocalInput = (ms) => {
 function editMatchForm(ref) {
   const m = getMatch(ref);
   if (!m) return;
+  if (isGolf(m)) return editGolfForm(ref);
   const teams = getTeams().map((t) => `<option value="${esc(t)}">`).join('');
   const usedPeriods = Math.max(m.period || 1, ...m.events.map((e) => e.period || 1));
   openModal(`
@@ -667,6 +695,7 @@ async function pipeBytes(bytes, stream) {
 
 /* compact form: short keys, score types and events as arrays */
 function packMatch(m) {
+  if (isGolf(m)) return packGolf(m);
   const types = m.sport.scoreTypes;
   return {
     v: 1, id: m.id, h: m.home, a: m.away, d: m.startedAt, pl: playedMs(m),
@@ -679,6 +708,7 @@ function packMatch(m) {
 }
 function unpackMatch(o) {
   if (!o || o.v !== 1) throw new Error('bad version');
+  if (o.k === 'golf') return unpackGolf(o);
   const types = o.s.t.map(([id, name, points, fu, hidden]) => ({ id: String(id), name: String(name), points: Number(points) || 0, followUpId: fu ? String(fu) : null, hidden: !!hidden }));
   const events = o.e.map((x, i) => (typeof x[0] === 'string'
     ? { id: 'e' + i, marker: x[0] === 't' ? 'timeup' : 'whistle', period: x[1], minute: x[2], team: null, made: false, createdAt: i }
@@ -708,10 +738,11 @@ async function decodeMatch(code) {
 const shareUrl = (code) => `${location.origin}${location.pathname}#/view/${code}`;
 
 async function shareMatch(m) {
-  const t = totals(m);
-  const title = `${teamName(m, 'home')} ${t.home}–${t.away} ${teamName(m, 'away')}`;
+  const t = isGolf(m) ? null : totals(m);
+  const title = isGolf(m) ? golfShareTitle(m) : `${teamName(m, 'home')} ${t.home}–${t.away} ${teamName(m, 'away')}`;
   const url = shareUrl(await encodeMatch(m));
-  const text = `${title} · ${m.sport.name}, ${new Date(m.startedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`;
+  const when = new Date(m.startedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  const text = isGolf(m) ? `${title}, ${when}` : `${title} · ${m.sport.name}, ${when}`;
   if (navigator.share) {
     try { await navigator.share({ title, text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
   }
@@ -758,6 +789,7 @@ const HEARTBEAT_MS = 60000;           // resend while live so viewers can tell t
 const STALE_MS = 150000;              // viewers warn after this long without an update
 
 function packLive(m) {
+  if (isGolf(m)) return { ...packGolf(m), end: !!m.endedAt, stop: !!m.liveStopped };
   return {
     ...packMatch(m),
     c: { p: m.period, el: elapsedMs(m), run: !!m.clock.runningSince, br: !!m.inBreak },
@@ -833,8 +865,9 @@ function liveButton(m) {
 async function shareLiveLink(m) {
   if (!m?.live) return;
   const url = watchUrl(m.live.id);
-  const title = `${teamName(m, 'home')} v ${teamName(m, 'away')} – live`;
-  const text = `Follow ${teamName(m, 'home')} v ${teamName(m, 'away')} live`;
+  const who = isGolf(m) ? `the round at ${m.course.name}` : `${teamName(m, 'home')} v ${teamName(m, 'away')}`;
+  const title = `${isGolf(m) ? m.course.name : who} – live`;
+  const text = `Follow ${who} live`;
   if (navigator.share) {
     try { await navigator.share({ title, text, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
   }
@@ -848,6 +881,11 @@ const watch = { id: null, ws: null, msg: null, match: null, offset: 0, status: '
 function unpackLive(msg, offset) {
   const st = msg.state;
   const m = unpackMatch(st);
+  if (isGolf(m)) {
+    m.endedAt = st.end ? msg.updatedAt - offset : null;
+    m.stopped = !!st.stop;
+    return m;
+  }
   m.period = st.c.p;
   m.inBreak = st.c.br;
   // server time -> this phone's time, so the clock ticks correctly here
@@ -912,7 +950,7 @@ document.addEventListener('visibilitychange', () => {
 
 /* big "TRY!" flash for viewers when a new score arrives */
 function announceScore(prev, m) {
-  if (!prev) return;
+  if (!prev || isGolf(m)) return;
   const before = totals(prev);
   const after = totals(m);
   if (before.home === after.home && before.away === after.away) return;
@@ -959,6 +997,7 @@ function viewWatch(id) {
   }
   const m = watch.match;
   if (!m) return '<p class="empty">Connecting to live match…</p>';
+  if (isGolf(m)) return viewWatchGolf(m);
   const t = totals(m);
   const ended = !!m.endedAt;
   const [cls, statusText] = watchStatusText();
@@ -990,7 +1029,7 @@ function viewWatch(id) {
    iPhone keeps a home-screen app's data separate from Safari, and links always open in Safari.
    So data has to come in from inside the app: a backup file, or a pasted link. */
 function buildBackup() {
-  return { app: 'scorecard', v: 1, exportedAt: Date.now(), history: getHistory(), sports: getSports(), teams: getTeams() };
+  return { app: 'scorecard', v: 1, exportedAt: Date.now(), history: getHistory(), sports: getSports(), teams: getTeams(), courses: getCourses() };
 }
 
 async function saveBackup() {
@@ -1019,15 +1058,17 @@ async function restoreBackup(file) {
   const sports = getSports();
   const newSports = (data.sports || []).filter((sp) => sp && sp.id && Array.isArray(sp.scoreTypes) && !sports.some((x) => x.id === sp.id));
   const newTeams = (data.teams || []).filter((t) => typeof t === 'string' && !getTeams().some((x) => x.toLowerCase() === t.toLowerCase()));
-  if (!newMatches.length && !newSports.length && !newTeams.length) return toast('Nothing new in that backup');
+  const newCourses = (data.courses || []).filter((c) => c && c.id && Array.isArray(c.pars) && !getCourses().some((x) => x.id === c.id));
+  if (!newMatches.length && !newSports.length && !newTeams.length && !newCourses.length) return toast('Nothing new in that backup');
   const ok = await confirmModal('Restore backup?',
-    `Adds ${newMatches.length} match${newMatches.length === 1 ? '' : 'es'}, ${newSports.length} sport${newSports.length === 1 ? '' : 's'} and ${newTeams.length} team${newTeams.length === 1 ? '' : 's'}. Nothing here is deleted.`,
+    `Adds ${newMatches.length} match${newMatches.length === 1 ? '' : 'es'}, ${newSports.length} sport${newSports.length === 1 ? '' : 's'}, ${newTeams.length} name${newTeams.length === 1 ? '' : 's'}${newCourses.length ? ` and ${newCourses.length} course${newCourses.length === 1 ? '' : 's'}` : ''}. Nothing here is deleted.`,
     'Restore', 'Cancel');
   if (!ok) return;
   store.set('history', have.concat(newMatches.map(normaliseMatch)));
   sortHistory();
   if (newSports.length) store.set('sports', sports.concat(newSports));
   rememberTeams(newTeams);
+  if (newCourses.length) store.set('courses', getCourses().concat(newCourses));
   toast(`Restored ${newMatches.length} match${newMatches.length === 1 ? '' : 'es'}`);
   render();
 }
@@ -1058,6 +1099,380 @@ function openLinkForm() {
     closeModal({ route: r });
   });
 }
+
+/* ---------- golf ----------
+   Stroke play against par, any number of players. A round is stored in the same places as a
+   match (live / history) but with kind 'golf': course { name, pars[] }, players [{ id, name }],
+   scores { playerId: [strokes|null per hole] }, hole (current index). It keeps empty clock and
+   events fields so shared code (time-up checks, heartbeat) is harmless. */
+const isGolf = (m) => !!m && (m.kind === 'golf' || m.sport?.kind === 'golf');
+const getCourses = () => store.get('courses', []);
+const QUICK_COURSES = [
+  { id: 'quick-18', name: 'Quick round (18 holes)', pars: Array(18).fill(4) },
+  { id: 'quick-9', name: 'Quick round (9 holes)', pars: Array(9).fill(4) },
+];
+const allCourses = () => getCourses().concat(QUICK_COURSES);
+
+/* per player: strokes so far, par of holes played, holes played, to-par */
+function golfStats(m, pid) {
+  const sc = m.scores[pid] || [];
+  let strokes = 0, par = 0, thru = 0;
+  m.course.pars.forEach((p, i) => { if (sc[i] != null) { strokes += sc[i]; par += p; thru += 1; } });
+  return { strokes, toPar: strokes - par, thru };
+}
+const fmtToPar = (n) => (n === 0 ? 'E' : n > 0 ? `+${n}` : `${n}`);
+function golfBoard(m) {
+  return m.players.map((p) => ({ ...p, ...golfStats(m, p.id) }))
+    .sort((a, b) => (b.thru > 0) - (a.thru > 0) || a.toPar - b.toPar || b.thru - a.thru || a.strokes - b.strokes);
+}
+const playerName = (p, i) => p.name || `Player ${i + 1}`;
+
+/* New match form fields */
+function golfNewFields() {
+  const last = store.get('lastCourse');
+  const courses = allCourses().map((c) => `<option value="${esc(c.id)}" ${c.id === last ? 'selected' : ''}>${esc(c.name)} · par ${c.pars.reduce((a, b) => a + b, 0)}</option>`).join('');
+  return `
+    <label>Course<select name="course">${courses}</select></label>
+    <p class="muted form-hint">Add your own courses with their pars in <b>Settings → Courses</b>.</p>
+    <div class="stack" id="golf-players">
+      <label>Players<input name="player" placeholder="Player 1" list="teams" autocomplete="off" maxlength="30"></label>
+    </div>
+    <button type="button" data-action="golf-add-player">+ Add player</button>`;
+}
+function golfNewFieldsAfter() { /* nothing to bind yet: kept so the form can grow */ }
+function addPlayerInput() {
+  const box = $('#golf-players');
+  if (!box) return;
+  const n = box.querySelectorAll('input').length + 1;
+  box.insertAdjacentHTML('beforeend', `<input name="player" placeholder="Player ${n}" list="teams" autocomplete="off" maxlength="30">`);
+  box.lastElementChild.focus();
+}
+
+function startGolfRound(f, sport) {
+  const course = allCourses().find((c) => c.id === f.elements.course.value) || QUICK_COURSES[0];
+  const names = [...f.querySelectorAll('[name=player]')].map((i) => i.value.trim());
+  const filled = names.filter(Boolean);
+  const players = (filled.length ? filled : ['']).map((name) => ({ id: uid(), name }));
+  rememberTeams(filled);
+  store.set('lastSport', sport.id);
+  store.set('lastCourse', course.id);
+  store.set('live', {
+    id: uid(), kind: 'golf', sport: clone(sport),
+    course: { name: course.name, pars: course.pars.slice() },
+    players, scores: Object.fromEntries(players.map((p) => [p.id, course.pars.map(() => null)])),
+    hole: 0, startedAt: Date.now(), endedAt: null,
+    clock: { elapsedMs: 0, runningSince: null }, events: [], periods: { count: 1, minutes: 1 }, period: 1, inBreak: false, playedMs: 0, reminded: [],
+  });
+  enterFullscreen();
+  go('live');
+}
+
+/* the hole screen */
+function viewGolf(m) {
+  const h = m.hole;
+  const par = m.course.pars[h];
+  const last = h === m.course.pars.length - 1;
+  const board = golfBoard(m);
+  const leader = board[0] && board[0].thru ? board[0] : null;
+  const holeOpts = m.course.pars.map((p, i) => `<option value="${i}" ${i === h ? 'selected' : ''}>Hole ${i + 1} · par ${p}</option>`).join('');
+  const rows = m.players.map((p, i) => {
+    const v = m.scores[p.id][h];
+    const st = golfStats(m, p.id);
+    return `
+      <div class="golf-row">
+        <div class="golf-who"><strong>${esc(playerName(p, i))}</strong><span class="tag">${st.thru ? `${fmtToPar(st.toPar)} thru ${st.thru}` : 'not started'}</span></div>
+        <button class="golf-step" data-action="golf-step" data-pid="${esc(p.id)}" data-d="-1" aria-label="One fewer">−</button>
+        <span class="golf-strokes ${v == null ? 'suggested' : scoreClass(v - par)}">${v == null ? par : v}</span>
+        <button class="golf-step" data-action="golf-step" data-pid="${esc(p.id)}" data-d="1" aria-label="One more">+</button>
+      </div>`;
+  }).join('');
+  return `
+    <div class="topbar"><button class="btn-ghost btn-small" data-go="">‹ Home</button><span class="tag">${esc(m.course.name)}</span><span class="spacer"></span>${liveButton(m)}<button class="btn-ghost btn-small" data-action="edit-match" data-ref="live">Edit</button></div>
+    <div class="scoreboard golf-hole" style="position:static">
+      <div class="golf-hole-no">Hole <b>${h + 1}</b><small>of ${m.course.pars.length}</small></div>
+      <div class="golf-par">Par <b>${par}</b></div>
+      <select class="golf-jump" data-action="golf-jump" aria-label="Go to hole">${holeOpts}</select>
+    </div>
+    <p class="golf-leader">${leader ? `Leader: <b>${esc(playerName(leader, m.players.indexOf(m.players.find((p) => p.id === leader.id))))}</b> ${fmtToPar(leader.toPar)} thru ${leader.thru}` : 'Tap − / + to set each score. Grey numbers are par and are saved when you move on.'}</p>
+    <div class="golf-rows">${rows}</div>
+    <div class="actionbar golf-actions">
+      <button data-action="golf-prev" ${h === 0 ? 'disabled' : ''}>‹ ${h || ''}</button>
+      <button data-go="card/live">Card</button>
+      ${last ? '<button class="btn-primary" data-action="golf-finish">Finish</button>'
+        : `<button class="btn-primary" data-action="golf-next">Hole ${h + 2} ›</button>`}
+    </div>`;
+}
+const scoreClass = (d) => (d <= -2 ? 'eagle' : d === -1 ? 'birdie' : d === 0 ? 'par' : d === 1 ? 'bogey' : 'double');
+
+/* fill any unset scores on the current hole with par (what the screen was showing) */
+function commitHole(m) {
+  const h = m.hole;
+  for (const p of m.players) if (m.scores[p.id][h] == null) m.scores[p.id][h] = m.course.pars[h];
+}
+
+/* scorecard grid: Out / In / Total for 18 holes, just Total for 9 */
+function golfCardTable(m, ref) {
+  const n = m.course.pars.length;
+  const nines = n === 18 ? [[0, 9, 'Out'], [9, 18, 'In']] : [[0, n, '']];
+  const sum = (arr, a, b) => arr.slice(a, b).reduce((t, v) => t + (v || 0), 0);
+  const head = nines.map(([a, b, lab]) => m.course.pars.slice(a, b).map((_, i) => `<th>${a + i + 1}</th>`).join('') + (lab ? `<th class="sub">${lab}</th>` : '')).join('') + '<th class="sub">Tot</th>';
+  const parRow = nines.map(([a, b, lab]) => m.course.pars.slice(a, b).map((p) => `<td>${p}</td>`).join('') + (lab ? `<td class="sub">${sum(m.course.pars, a, b)}</td>` : '')).join('') + `<td class="sub">${sum(m.course.pars, 0, n)}</td>`;
+  const rows = m.players.map((p, pi) => {
+    const sc = m.scores[p.id];
+    const cells = nines.map(([a, b, lab]) => sc.slice(a, b).map((v, i) => {
+      const hole = a + i;
+      const cls = v == null ? '' : scoreClass(v - m.course.pars[hole]);
+      const inner = `<span class="${cls}">${v == null ? '·' : v}</span>`;
+      return ref ? `<td><button class="cell" data-action="golf-cell" data-ref="${esc(ref)}" data-pid="${esc(p.id)}" data-hole="${hole}">${inner}</button></td>` : `<td>${inner}</td>`;
+    }).join('') + (lab ? `<td class="sub">${sum(sc, a, b) || ''}</td>` : '')).join('');
+    const st = golfStats(m, p.id);
+    const tp = st.thru ? `<small class="${st.toPar < 0 ? 'under' : st.toPar > 0 ? 'over' : ''}">${fmtToPar(st.toPar)}</small>` : '';
+    return `<tr><th class="name">${esc(playerName(p, pi))}</th>${cells}<td class="sub tot">${st.strokes || ''}${tp}</td></tr>`;
+  }).join('');
+  return `
+    <div class="golf-card-wrap"><table class="golf-card">
+      <thead><tr><th class="name">Hole</th>${head}</tr></thead>
+      <tbody><tr class="par-row"><th class="name">Par</th>${parRow}</tr>${rows}</tbody>
+    </table></div>
+    <p class="muted golf-key"><span class="eagle">2</span> eagle <span class="birdie">3</span> birdie <span class="bogey">5</span> bogey <span class="double">6</span> double+${ref ? ' · tap a score to change it' : ''}</p>`;
+}
+
+function viewGolfCard(ref) {
+  const m = getMatch(ref);
+  if (!m || !isGolf(m)) { setTimeout(() => go(''), 0); return ''; }
+  const back = ref === 'live' ? 'live' : `match/${ref}`;
+  return `
+    <div class="topbar"><button class="btn-ghost btn-small" data-go="${esc(back)}">‹ Back</button><h2>Scorecard</h2></div>
+    <p class="tag">${esc(m.course.name)}</p>
+    ${golfCardTable(m, ref)}
+    ${ref === 'live' ? '<button class="btn-danger" data-action="golf-finish">Finish round</button>' : ''}`;
+}
+
+function golfLeaderboard(m) {
+  const board = golfBoard(m);
+  const holes = m.course.pars.length;
+  // golf positions share ties: 1, T2, T2, 4
+  const pos = (p) => {
+    const ahead = board.filter((q) => q.thru && q.toPar < p.toPar).length;
+    const tied = board.filter((q) => q.thru && q.toPar === p.toPar).length;
+    return `${tied > 1 ? 'T' : ''}${ahead + 1}`;
+  };
+  return `<ol class="golf-board">${board.map((p, i) => `
+    <li class="card ${i === 0 && p.thru ? 'leader' : ''}">
+      <span class="pos">${p.thru ? pos(p) : '–'}</span>
+      <span class="grow"><strong>${esc(playerName(p, m.players.findIndex((x) => x.id === p.id)))}</strong><br><span class="tag">${p.thru === holes ? 'Finished' : p.thru ? `Thru ${p.thru}` : 'Not started'}</span></span>
+      <span class="golf-total">${p.thru ? p.strokes : ''}</span>
+      <span class="golf-topar ${p.toPar < 0 ? 'under' : p.toPar > 0 ? 'over' : ''}">${p.thru ? fmtToPar(p.toPar) : ''}</span>
+    </li>`).join('')}</ol>`;
+}
+
+/* used by round detail, shared links and live viewers */
+function golfSummary(m, ref) {
+  const totalPar = m.course.pars.reduce((a, b) => a + b, 0);
+  return `
+    <div class="scoreboard golf-head" style="position:static">
+      <div class="golf-course">${esc(m.course.name)}</div>
+      <div class="tag">${m.course.pars.length} holes · par ${totalPar} · ${new Date(m.startedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}</div>
+    </div>
+    <h3>Leaderboard</h3>
+    ${golfLeaderboard(m)}
+    <h3>Scorecard</h3>
+    ${golfCardTable(m, ref)}`;
+}
+
+function viewGolfMatch(m) {
+  return `
+    <div class="topbar"><button class="btn-ghost btn-small" data-go="history">‹ History</button><span class="tag">Golf</span></div>
+    ${golfSummary(m, m.id)}
+    <button class="btn-primary" data-action="share-match" data-id="${esc(m.id)}">Share result</button>
+    <button data-action="edit-match" data-ref="${esc(m.id)}">Edit round</button>
+    <button class="btn-danger" data-action="delete-match" data-id="${esc(m.id)}">Delete round</button>`;
+}
+
+function golfHistoryRow(m) {
+  const b = golfBoard(m)[0];
+  const lead = b && b.thru ? `${esc(playerName(b, m.players.findIndex((x) => x.id === b.id)))} ${b.strokes} (${fmtToPar(b.toPar)})` : 'No scores';
+  return `<li><button class="list-item" data-go="match/${esc(m.id)}">
+    <span class="grow"><span class="tag">${new Date(m.startedAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} · Golf · ${esc(m.course.name)}</span><br>
+    ${lead}${m.players.length > 1 ? ` <span class="tag">· ${m.players.length} players</span>` : ''}</span>
+    <span class="tag">›</span></button></li>`;
+}
+
+function golfShareTitle(m) {
+  const b = golfBoard(m)[0];
+  return b && b.thru ? `${playerName(b, m.players.findIndex((x) => x.id === b.id))} ${b.strokes} (${fmtToPar(b.toPar)}) at ${m.course.name}` : `Golf at ${m.course.name}`;
+}
+
+/* change one score from the card (any hole, live or saved round) */
+function golfCellForm(ref, pid, hole) {
+  const m = getMatch(ref);
+  const p = m.players.find((x) => x.id === pid);
+  const par = m.course.pars[hole];
+  const cur = m.scores[pid][hole];
+  openModal(`
+    <h2>${esc(playerName(p, m.players.indexOf(p)))} · hole ${hole + 1}</h2>
+    <p class="muted">Par ${par}</p>
+    <form id="cell-form" class="stack" method="dialog">
+      <input name="v" type="number" inputmode="numeric" min="1" max="20" value="${cur == null ? par : cur}" required>
+      <div class="row">
+        <button type="button" data-modal="clear">Clear</button>
+        <button type="submit" class="btn-primary">Save</button>
+      </div>
+    </form>`, (res) => {
+    if (res === 'dismiss' || res === undefined) return;
+    const m2 = getMatch(ref);
+    m2.scores[pid][hole] = res === 'clear' ? null : res;
+    saveMatch(ref, m2);
+    render();
+  });
+  const f = $('#cell-form');
+  f.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const v = parseInt(f.elements.v.value, 10);
+    closeModal(Number.isFinite(v) && v > 0 ? Math.min(v, 20) : 'dismiss');
+  });
+}
+
+/* edit round: player names, add a player, date */
+function editGolfForm(ref) {
+  const m = getMatch(ref);
+  openModal(`
+    <h2>Edit round</h2>
+    <form id="golf-edit" class="stack" method="dialog">
+      ${m.players.map((p, i) => `<label>Player ${i + 1}<input name="p-${esc(p.id)}" value="${esc(p.name)}" placeholder="Player ${i + 1}" list="teams-edit" maxlength="30"></label>`).join('')}
+      <label>Add a player<input name="newp" placeholder="Name (optional)" list="teams-edit" maxlength="30"></label>
+      <datalist id="teams-edit">${getTeams().map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
+      <label>Date &amp; tee time<input name="date" type="datetime-local" value="${toLocalInput(m.startedAt)}" required></label>
+      <div class="row">
+        <button type="button" data-modal="cancel">Cancel</button>
+        <button type="submit" class="btn-primary">Save</button>
+      </div>
+    </form>`, (res) => {
+    if (!res || typeof res !== 'object') return;
+    const m2 = getMatch(ref);
+    m2.players.forEach((p) => { p.name = (res.names[p.id] ?? p.name).trim(); });
+    if (res.newp) { const p = { id: uid(), name: res.newp }; m2.players.push(p); m2.scores[p.id] = m2.course.pars.map(() => null); }
+    if (Number.isFinite(res.when)) m2.startedAt = res.when;
+    saveMatch(ref, m2);
+    rememberTeams(m2.players.map((p) => p.name));
+    if (ref !== 'live') sortHistory();
+    toast('Round updated');
+    render();
+  });
+  const f = $('#golf-edit');
+  f.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const names = Object.fromEntries(m.players.map((p) => [p.id, f.elements[`p-${p.id}`].value]));
+    closeModal({ names, newp: f.elements.newp.value.trim(), when: new Date(f.elements.date.value).getTime() });
+  });
+}
+
+/* share links and live sharing */
+function packGolf(m) {
+  return {
+    v: 1, k: 'golf', id: m.id, d: m.startedAt, h: m.hole || 0,
+    c: [m.course.name, m.course.pars],
+    pl: m.players.map((p) => p.name),
+    s: m.players.map((p) => m.scores[p.id].map((v) => (v == null ? 0 : v))),
+  };
+}
+function unpackGolf(o) {
+  const players = o.pl.map((name, i) => ({ id: 'p' + i, name: String(name || '') }));
+  const pars = o.c[1].map(Number);
+  return {
+    id: String(o.id), kind: 'golf', sport: { id: 'golf', name: 'Golf', kind: 'golf', scoreTypes: [], periods: { count: 1, minutes: 1 } },
+    course: { name: String(o.c[0]), pars }, players,
+    scores: Object.fromEntries(players.map((p, i) => [p.id, pars.map((_, h) => (o.s[i] && o.s[i][h]) || null)])),
+    hole: Number(o.h) || 0, startedAt: Number(o.d), endedAt: Number(o.d),
+    clock: { elapsedMs: 0, runningSince: null }, events: [], periods: { count: 1, minutes: 1 }, period: 1, inBreak: true, playedMs: 0, reminded: [],
+  };
+}
+
+function viewWatchGolf(m) {
+  const ended = !!m.endedAt;
+  const [cls, statusText] = watchStatusText();
+  const saved = getHistory().some((h) => h.id === m.id);
+  return `
+    <div class="topbar"><span class="live-pill ${ended ? 'ft' : ''}">${ended ? 'Finished' : '● Live'}</span><span class="tag">Golf</span></div>
+    <p class="watch-status ${cls}" id="watch-status">${esc(ended ? 'Final scores' : statusText)}${ended ? '' : ` · on hole ${m.hole + 1}`}</p>
+    ${golfSummary(m, null)}
+    ${ended ? (saved ? `<button data-go="match/${esc(m.id)}">Saved in your history ›</button>` : '<button class="btn-primary" data-action="save-watched">Save to my history</button>') : ''}
+    <button class="btn-ghost" data-go="">Open Scorecard</button>`;
+}
+
+/* courses in Settings */
+function coursesSection() {
+  const cs = getCourses();
+  return `
+    <h3>Golf courses</h3>
+    ${cs.length ? `<ul class="list">${cs.map((c) => `
+      <li><button class="list-item" data-go="course/${esc(c.id)}">
+        <span class="grow">${esc(c.name)}<br><span class="tag">${c.pars.length} holes · par ${c.pars.reduce((a, b) => a + b, 0)}</span></span>
+        <span class="tag">Edit ›</span></button></li>`).join('')}</ul>` : '<p class="muted">Add the courses you play so each hole has the right par. Without one, use a Quick round (par 4 every hole).</p>'}
+    <button data-go="course/new">+ New course</button>`;
+}
+
+let courseDraft = null;
+function viewCourse(id) {
+  if (!courseDraft || courseDraft._for !== id) {
+    const existing = getCourses().find((c) => c.id === id);
+    courseDraft = existing ? clone(existing) : { id: uid(), name: '', pars: Array(18).fill(4) };
+    courseDraft._for = id;
+    courseDraft._isNew = !existing;
+  }
+  const d = courseDraft;
+  const total = d.pars.reduce((a, b) => a + b, 0);
+  return `
+    <div class="topbar"><button class="btn-ghost btn-small" data-action="cancel-course">‹ Cancel</button><h2>${d._isNew ? 'New course' : 'Edit course'}</h2></div>
+    <form id="course-form" class="stack">
+      <label>Course name<input name="name" value="${esc(d.name)}" placeholder="e.g. Royal Bath GC" maxlength="40" required></label>
+      <label>Holes<select name="holes" data-action="course-holes">
+        <option value="18" ${d.pars.length === 18 ? 'selected' : ''}>18 holes</option>
+        <option value="9" ${d.pars.length === 9 ? 'selected' : ''}>9 holes</option>
+      </select></label>
+      <h3>Par for each hole</h3>
+      <div class="par-grid">${d.pars.map((p, i) => `
+        <label>${i + 1}<select name="par-${i}">${[3, 4, 5, 6].map((v) => `<option ${v === p ? 'selected' : ''}>${v}</option>`).join('')}</select></label>`).join('')}
+      </div>
+      <p class="muted" id="par-total">Total par ${total}</p>
+      <button type="submit" class="btn-primary btn-big">Save course</button>
+      ${d._isNew ? '' : '<button type="button" class="btn-danger" data-action="delete-course">Delete course</button>'}
+    </form>`;
+}
+function readCourseForm() {
+  const f = $('#course-form');
+  if (!f || !courseDraft) return;
+  courseDraft.name = f.elements.name.value;
+  courseDraft.pars = courseDraft.pars.map((p, i) => Number(f.elements[`par-${i}`]?.value) || p);
+}
+viewCourse.after = () => {
+  const f = $('#course-form');
+  f.addEventListener('change', (e) => {
+    if (e.target.name === 'holes') {
+      readCourseForm();
+      const n = Number(e.target.value);
+      courseDraft.pars = Array.from({ length: n }, (_, i) => courseDraft.pars[i] || 4);
+      render();
+      return;
+    }
+    readCourseForm();
+    $('#par-total').textContent = `Total par ${courseDraft.pars.reduce((a, b) => a + b, 0)}`;
+  });
+  f.addEventListener('submit', (e) => {
+    e.preventDefault();
+    readCourseForm();
+    const { _for, _isNew, ...c } = courseDraft;
+    c.name = c.name.trim();
+    if (!c.name) return toast('Give the course a name');
+    const cs = getCourses();
+    const i = cs.findIndex((x) => x.id === c.id);
+    if (i >= 0) cs[i] = c; else cs.push(c);
+    store.set('courses', cs);
+    courseDraft = null;
+    toast('Course saved');
+    go('settings');
+  });
+};
 
 /* ---------- help, FAQ and welcome ----------
    One copy of the content: shown in the app at #/help, and the same link works in any browser
@@ -1104,6 +1519,13 @@ const HELP = {
       '<b>+ New sport</b> builds your own: name it, set the periods, and add score types. A <b>follow-up</b> (like a conversion after a try) makes the app ask “made or missed?” after that score.',
       'Team names you type are remembered and suggested next time. Remove old ones in Settings.',
     ] },
+    { id: 'golf', title: 'Golf rounds', body: [
+      'Add your courses in <b>Settings → Golf courses</b>: name, 9 or 18 holes, and each hole’s par. No course set up? Pick a <b>Quick round</b> (par 4 on every hole).',
+      '<b>New match → Golf</b>: choose the course and add as many players as you like.',
+      'On each hole, use <b>−</b> / <b>+</b> to set each player’s strokes. Grey numbers are par and are saved when you tap <b>Next hole</b>. Each player shows how they stand, e.g. <b>+3 thru 7</b>.',
+      '<b>Card</b> shows the whole scorecard with birdies and bogeys marked. Tap any score to fix it. Use the hole picker to jump back to a hole.',
+      'On the last hole, <b>Finish</b> saves the round with a leaderboard. <b>Share result</b> and <b>Go live</b> work just like for matches.',
+    ] },
     { id: 'backup', title: 'Backups and changing phones', body: [
       'Your matches are stored only on your phone. <b>Settings → Back up</b> saves them, with your sports and teams, to a file. Save it to Files or iCloud, or email it to yourself.',
       'On a new phone, or after re-adding the app, use <b>Settings → Restore</b> and pick that file. Nothing already there is deleted.',
@@ -1118,6 +1540,7 @@ const HELP = {
     { q: 'Why didn’t my phone vibrate at half time?', a: 'iPhones don’t allow websites to vibrate. You still get the red flash, banner and beep. Check the beep is on in <b>Settings → Time-up alerts</b> and your phone isn’t on silent.' },
     { q: 'My screen keeps turning off.', a: 'The app keeps the screen on during a live match. Low Power Mode on iPhone can override this, so turn it off for the match, or raise Auto-Lock in Settings.' },
     { q: 'Viewers say “scorer’s phone offline”.', a: 'Your phone hasn’t reached the internet for a couple of minutes. Scores still save on your phone and are sent when signal returns.' },
+    { q: 'Golf: why did a player get par on a hole I didn’t touch?', a: 'When you move to the next hole, any score you didn’t change is saved as par, the grey number shown. Fix it on the <b>Card</b> by tapping that hole.' },
     { q: 'Can two people score the same match?', a: 'Not yet. Only the phone that tapped <b>Go live</b> can update a live match.' },
     { q: 'How do I get the latest version?', a: 'When an update is ready, a green <b>New version available</b> bar appears. Tap it. The version number is at the bottom of every screen.' },
     { q: 'Is my data private?', a: 'Matches stay on your phone. A shared result link carries that match inside the link itself. Live matches pass through our live-score server and are deleted 30 days after the last update. There are no accounts or tracking.' },
@@ -1181,6 +1604,7 @@ function showWelcome(step = 0) {
 
 /* Scoreboard, breakdown and timeline: used by match detail and shared-link views. */
 function matchSummary(m) {
+  if (isGolf(m)) return golfSummary(m, null);
   const t = totals(m);
   const bd = (side) => {
     const lines = breakdown(m, side);
@@ -1207,20 +1631,21 @@ function viewSettings() {
   return `
     <div class="topbar"><button class="btn-ghost btn-small" data-go="">‹ Back</button><h2>Settings</h2></div>
     <h3>Sports &amp; scoring</h3>
-    <ul class="list">${sports.map((s) => `
+    <ul class="list">${sports.filter((s) => s.kind !== 'golf').map((s) => `
       <li><button class="list-item" data-go="sport/${esc(s.id)}">
         <span class="grow">${esc(s.name)}<br><span class="tag">${s.periods.count} × ${s.periods.minutes} min · ${s.scoreTypes.map((t) => `${esc(t.name)} ${t.points}`).join(' · ')}</span></span>
         <span class="tag">Edit ›</span></button></li>`).join('')}
     </ul>
     <button data-go="sport/new">+ New sport</button>
     ${missingPresets.length ? `<button class="btn-ghost" data-action="restore-presets">Restore default sports</button>` : ''}
+    ${coursesSection()}
     <h3>Time-up alerts</h3>
     <label class="check"><input type="checkbox" data-action="toggle-sound" ${store.get('sound', true) === false ? '' : 'checked'}> Beep when a half (or period) is up</label>
     <p class="muted" style="font-size:.95rem">The clock always flashes, and Android phones also vibrate.</p>
-    <h3>Saved teams</h3>
+    <h3>Saved teams &amp; players</h3>
     ${teams.length ? `<ul class="list">${teams.map((t, i) => `
       <li class="list-item"><span class="grow">${esc(t)}</span><button class="btn-small btn-ghost" data-action="delete-team" data-i="${i}" aria-label="Delete ${esc(t)}">✕</button></li>`).join('')}</ul>`
-      : '<p class="muted">Team names you type when starting a match are saved here.</p>'}
+      : '<p class="muted">Team and player names you type when starting a match are saved here.</p>'}
     <h3>Backup &amp; restore</h3>
     <p class="muted" style="font-size:.95rem">Saves your matches, sports and teams to a file, e.g. before removing the app from your home screen. Restore adds them back; nothing already here is deleted.</p>
     <div class="row">
@@ -1551,6 +1976,46 @@ const actions = {
     const m = getMatch(el.dataset.id);
     if (m) await shareMatch(m);
   },
+  'golf-add-player'() { addPlayerInput(); },
+  'golf-step'(el) {
+    updateLive((m) => {
+      const sc = m.scores[el.dataset.pid];
+      const cur = sc[m.hole] == null ? m.course.pars[m.hole] : sc[m.hole];
+      sc[m.hole] = Math.max(1, Math.min(20, cur + Number(el.dataset.d)));
+    });
+    if (navigator.vibrate) navigator.vibrate(15);
+  },
+  'golf-next'() { updateLive((m) => { commitHole(m); m.hole = Math.min(m.hole + 1, m.course.pars.length - 1); }); },
+  'golf-prev'() { updateLive((m) => { m.hole = Math.max(0, m.hole - 1); }); },
+  async 'golf-finish'() {
+    const m = getLive();
+    if (!m) return;
+    const missing = m.players.reduce((t, p) => t + m.scores[p.id].filter((v, i) => v == null && i !== m.hole).length, 0);
+    const ok = await confirmModal('Finish the round?', missing
+      ? `${missing} score${missing === 1 ? ' is' : 's are'} still empty. You can fill them in later from the scorecard.`
+      : 'The round is saved to History.', 'Finish round', 'Keep playing', true);
+    if (!ok) return;
+    const m2 = getLive();
+    commitHole(m2);
+    m2.endedAt = Date.now();
+    publishLive(m2);
+    const h = getHistory();
+    h.unshift(m2);
+    store.set('history', h);
+    store.del('live');
+    setWakeLock(false);
+    exitFullscreen();
+    go('match/' + m2.id);
+  },
+  'golf-cell'(el) { golfCellForm(el.dataset.ref, el.dataset.pid, Number(el.dataset.hole)); },
+  'cancel-course'() { courseDraft = null; go('settings'); },
+  async 'delete-course'() {
+    const ok = await confirmModal(`Delete ${courseDraft.name || 'this course'}?`, 'Rounds already played there are not affected.', 'Delete', 'Cancel', true);
+    if (!ok) return;
+    store.set('courses', getCourses().filter((c) => c.id !== courseDraft.id));
+    courseDraft = null;
+    go('settings');
+  },
   backup() { saveBackup(); },
   'show-welcome'() { showWelcome(0); },
   async 'share-help'() {
@@ -1618,7 +2083,15 @@ const actions = {
   },
 };
 
+document.addEventListener('change', (e) => {
+  if (e.target.matches('.golf-jump')) {
+    const to = Number(e.target.value);
+    updateLive((m) => { commitHole(m); m.hole = to; });
+  }
+});
+
 document.addEventListener('click', (e) => {
+  if (e.target.matches('select')) return; // selects handle their own change events
   armAudio();
   const el = e.target.closest('[data-go],[data-action],[data-score],[data-modal]');
   if (!el) return;

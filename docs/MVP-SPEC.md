@@ -158,6 +158,20 @@ When you watch a match you lose track of the score breakdown, who scored when an
 - When not installed, Help shows an install tip for iPhone or Android.
 - **Welcome:** 3 cards on first launch (install / scoring a match / where Help is). It appears on the Home screen only, never over a shared or live link. It's skippable, never shown again, and can be replayed from Help.
 
+### 6.7f Golf
+
+- **Golf** is a sport of its own kind: stroke play against par, with any number of players and no clock.
+- **Courses** (Settings → Golf courses): name, 9 or 18 holes, and par 3–6 per hole. Built-in **Quick round** courses (18 or 9 holes, par 4 each) cover courses that aren't set up.
+- **New match → Golf:** choose a course, then add players. Names are saved with the team names.
+- **Hole screen:**
+  - hole number, par and a hole picker
+  - the leader so far
+  - one row per player with − / + buttons and their score against par ("+3 thru 7")
+  - a fixed bottom bar with ‹ Prev / Card / Next hole ›, which becomes **Finish** on the last hole
+  - untouched scores show par in grey and are saved when moving on
+- **Card:** a grid of every hole for every player, with Out/In for 18 holes and a total with ± against par. It marks eagle, birdie, bogey and double bogey or worse. Tapping a score edits it, during or after the round.
+- **Finish** saves to History with a leaderboard (ties shown as T2) and the card. Share result, Go live (a live leaderboard with the current hole) and backup/restore (including courses) all work for golf.
+
 ### 6.8 History
 
 - A list of finished matches: date, sport, teams, final score.
