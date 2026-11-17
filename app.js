@@ -1948,65 +1948,78 @@ const HELP = {
     ] },
     { id: 'match', title: 'Scoring a match', body: [
       'Tap <b>New match</b>, choose the sport, type the team names (or leave them as Home and Away) and check the <b>periods and minutes</b>, e.g. 2 × 35 for juniors.',
-      'At kick-off tap the big green <b>Start clock</b>. Score buttons only work while the clock runs. If you tap one when it is stopped, you can start the clock and add the score in one go.',
+      'You are asked to start the clock straight away. Tap the big green <b>Start clock</b> at kick-off, or <b>Not yet</b> and use the green bar later. On Android the app goes full screen. Swipe from the edge to see your phone’s bars.',
+      'Score buttons only work while the clock runs. If you tap one when it is stopped, you can start the clock (or the next half) and add the score in one go.',
       'Tap a team’s button when they score. After a <b>try</b> you are asked whether the <b>conversion</b> was made or missed.',
       'Use <b>Pause</b> for stoppages. Pausing asks you to confirm so a stray tap can’t stop the clock.',
     ] },
     { id: 'halves', title: 'Half time and full time', body: [
-      'When a half’s time is up, the screen flashes red, a <b>HALF TIME</b> banner shows, and the phone beeps (and vibrates on Android). The clock keeps counting added time, e.g. 40:00 +2:10.',
+      'When a half’s time is up, the screen flashes red, a <b>HALF TIME</b> banner shows, and the phone beeps (and vibrates on Android). The clock keeps counting added time, e.g. 40:00 +2:10. If 10 more minutes pass, it reminds you again.',
       'When the ref blows, tap the big red <b>Half time</b> button. Then tap <b>Start 2nd half</b> at the restart. The 2nd half always starts at the right time (e.g. 40:00) even if you paused late.',
       'At the end, tap <b>Full time</b>, or <b>End</b> at the bottom, to save the match to <b>History</b>.',
       'If the ref blows early, pause the clock and tap <b>End 1st half early</b>.',
     ] },
     { id: 'mistakes', title: 'Fixing mistakes', body: [
       '<b>Undo</b> removes the last score straight away.',
-      '<b>Log</b> lists everything. Tap any entry to change the team, score type or minute, or delete it. <b>+ Add missed event</b> adds a score you missed, at any minute.',
+      '<b>Log</b> lists everything, including when time was up and when the whistle went. Tap any score to change the team, score type, half or minute, or delete it. <b>+ Add missed event</b> adds a score you missed, at any minute.',
       '<b>Edit</b> (during a match) or <b>Edit match</b> (in History) changes team names, date and the period length. Changing 40 to 35 minutes moves 2nd-half times to match.',
     ] },
     { id: 'share', title: 'Sharing a result', body: [
-      'Open a match in <b>History</b> and tap <b>Share result</b> to send the score and a link, e.g. on WhatsApp.',
-      'Anyone can open the link to see the score, breakdown and timeline. Scorecard users can tap <b>Save to my history</b>.',
-      'On iPhone, links always open in Safari, not the home-screen app. To save one into the app, copy the link, then in the app use <b>History → Open a shared link</b>.',
+      'Open a match in <b>History</b>. <b>Share result</b> opens your phone’s share sheet with the score and the link in one message, e.g. for WhatsApp.',
+      '<b>Copy link</b> copies just the link, handy for sending to yourself or pasting anywhere.',
+      'Anyone can open the link to see the score, breakdown and timeline (or the leaderboard and card for golf, the overs for cricket). Scorecard users can tap <b>Save to my history</b>.',
+      'On iPhone, links always open in Safari, not the home-screen app. To save one into the app, copy the link, then in the app use <b>Open a shared link</b> (in History or Settings).',
+      'A link holds the match as it was when you shared it. If you edit the match afterwards, share it again.',
+    ] },
+    { id: 'move', title: 'Moving a match to another phone', body: [
+      'On the first phone, open the match in <b>History</b> and tap <b>Copy link</b>. Send it to yourself, e.g. in Notes, a message or an email.',
+      'On the other phone, copy the link, open Scorecard, and go to <b>History → Open a shared link → Paste from clipboard</b>. Then tap <b>Save to my history</b>.',
+      'To move everything at once, use a backup instead (see <b>Backups and changing phones</b>).',
     ] },
     { id: 'live', title: 'Live scores for people not at the game', body: [
-      'During a match tap <b>Go live</b> at the top and send the link. Viewers see the score, a ticking clock and a big flash whenever someone scores.',
+      'During a match, round or innings, tap <b>Go live</b> at the top and send the link. Viewers see the score and a ticking clock, with a big flash when someone scores. Golf viewers see the leaderboard and current hole. Cricket viewers see each over and <b>FOUR!</b> / <b>SIX!</b> / <b>WICKET!</b>.',
       'The red <b>LIVE</b> badge turns grey when your phone has no signal. Scores you add still count, and viewers catch up when you reconnect.',
-      'Tap the <b>LIVE</b> badge to send the link again or stop sharing. Live links show the final score after full time and are deleted after 30 days.',
+      'Tap the <b>LIVE</b> badge to share the link again, <b>Copy live link</b>, or stop sharing. Live links show the final score afterwards and are deleted after 30 days.',
     ] },
     { id: 'sports', title: 'Sports, scoring and teams', body: [
-      '<b>Settings</b> has Rugby Union (try 5, conversion 2, penalty 3, drop goal 3) and Football (goal 1). Tap one to change its points or periods.',
+      'Built in: <b>Rugby Union</b> (try 5, conversion 2, penalty 3, drop goal 3, penalty try 7), <b>Rugby League</b> (try 4, conversion 2, penalty goal 2, drop goal 1), <b>Rugby Sevens</b> (2 × 7), <b>Football</b>, and goal sports: <b>Netball, Hockey, Ice hockey, Handball, Futsal, Water polo, Lacrosse</b>.',
+      'Tap any of them in <b>Settings</b> to change its points or periods. Matches already played keep their original scoring.',
       '<b>+ New sport</b> builds your own: name it, set the periods, and add score types. A <b>follow-up</b> (like a conversion after a try) makes the app ask “made or missed?” after that score.',
-      'Team names you type are remembered and suggested next time. Remove old ones in Settings.',
+      '<b>Cricket</b> and <b>Golf</b> work differently and have their own setup (see below).',
+      'Team and player names you type are remembered and suggested next time. Remove old ones in Settings.',
     ] },
     { id: 'cricket', title: 'Cricket', body: [
       '<b>New match → Cricket</b>: team names, overs per side, wickets and who bats first.',
       'Tap a button for every ball: <b>· (dot) 1 2 3 4 6</b> or <b>Wicket</b>. <b>Wide</b> and <b>No-ball</b> add 1 run, ask for any extra runs, and are re-bowled. <b>Bye</b> asks how many byes or leg-byes.',
-      'The board shows the score (e.g. 87/3), overs, run rate and this over. In the chase it shows the target and <b>need X off Y balls</b>.',
-      'The innings ends by itself when the overs run out or the side is all out. Tap <b>Start 2nd innings</b>. The match ends when the target is reached or the overs run out, with the result worked out for you.',
-      '<b>Undo</b> removes the last ball. <b>End</b> stops a match early, e.g. for rain.',
+      'The board shows the score (e.g. 87/3), overs, run rate and this over, with the last few overs below. In the chase it shows the target and <b>need X off Y balls</b>.',
+      'The innings ends by itself when the overs run out or the side is all out. Tap <b>Start 2nd innings</b>. The match ends when the target is reached or the overs run out, with the result worked out for you. Tap <b>Finish match</b> to save it.',
+      '<b>Undo</b> removes the last ball. At the start of the 2nd innings it takes you back to the 1st. <b>End</b> stops a match early, e.g. for rain. <b>Edit</b> changes team names, overs, wickets or date.',
     ] },
     { id: 'golf', title: 'Golf rounds', body: [
       'Add your courses in <b>Settings → Golf courses</b>: name, 9 or 18 holes, and each hole’s par. No course set up? Pick a <b>Quick round</b> (par 4 on every hole).',
       '<b>New match → Golf</b>: choose the course and add as many players as you like.',
-      'On each hole, use <b>−</b> / <b>+</b> to set each player’s strokes. Grey numbers are par and are saved when you tap <b>Next hole</b>. Each player shows how they stand, e.g. <b>+3 thru 7</b>.',
-      '<b>Card</b> shows the whole scorecard with birdies and bogeys marked. Tap any score to fix it. Use the hole picker to jump back to a hole.',
-      'On the last hole, <b>Finish</b> saves the round with a leaderboard. <b>Share result</b> and <b>Go live</b> work just like for matches.',
+      'On each hole, use <b>−</b> / <b>+</b> to set each player’s strokes. Grey numbers are par and are saved when you tap <b>Next hole</b> at the bottom. Each player shows how they stand, e.g. <b>+3 thru 7</b>.',
+      '<b>Card</b> shows the whole scorecard. Birdies are circled, bogeys boxed, and doubles or worse in red. Tap any score to fix it, during or after the round. Use the hole picker to jump to a hole.',
+      'On the last hole, <b>Finish</b> saves the round with a leaderboard. Ties show as <b>T2</b>. <b>Edit round</b> renames players, adds a player or changes the date.',
     ] },
     { id: 'backup', title: 'Backups and changing phones', body: [
-      'Your matches are stored only on your phone. <b>Settings → Back up</b> saves them, with your sports and teams, to a file. Save it to Files or iCloud, or email it to yourself.',
-      'On a new phone, or after re-adding the app, use <b>Settings → Restore</b> and pick that file. Nothing already there is deleted.',
+      'Your matches are stored only on your phone. <b>Settings → Back up</b> saves them, with your sports, team names and golf courses, to a file. Save it to Files or iCloud, or email it to yourself.',
+      'On a new phone, or after re-adding the app, use <b>Settings → Restore</b> and pick that file. Nothing already there is deleted, and restoring twice won’t create duplicates.',
     ] },
   ],
   faq: [
     { q: 'Why don’t the score buttons work?', a: 'The clock isn’t running, so the buttons look faded. Tap one and choose <b>Start clock & add score</b>, or tap the green <b>Start clock</b> bar.' },
     { q: 'Do I need signal at the ground?', a: 'No. Everything works offline except live sharing, and even that catches up when signal comes back.' },
+    { q: 'How do I move a match to my other phone?', a: 'Open it in History, tap <b>Copy link</b> and send it to yourself. On the other phone use <b>History → Open a shared link</b> and <b>Save to my history</b>. For everything at once, use <b>Settings → Back up</b> and <b>Restore</b>.' },
     { q: 'I removed the app from my home screen. Where are my matches?', a: 'On iPhone, removing the icon deletes its data. Next time, use <b>Settings → Back up</b> first, then <b>Restore</b> after adding it again. Matches you shared can be brought back with <b>Open a shared link</b>.' },
-    { q: 'I opened a shared link but it isn’t in my app.', a: 'On iPhone, links open in Safari, which keeps separate data from the home-screen app. Copy the link and use <b>History → Open a shared link</b> inside the app.' },
+    { q: 'I opened a shared link but it isn’t in my app.', a: 'On iPhone, links open in Safari, which keeps separate data from the home-screen app. Copy the link and use <b>Open a shared link</b> inside the app (in History or Settings).' },
     { q: 'I forgot to change the half length. Can I fix the times?', a: 'Yes. Open the match, tap <b>Edit match</b> and change the minutes. Event times in later halves move to match.' },
     { q: 'Why didn’t my phone vibrate at half time?', a: 'iPhones don’t allow websites to vibrate. You still get the red flash, banner and beep. Check the beep is on in <b>Settings → Time-up alerts</b> and your phone isn’t on silent.' },
-    { q: 'My screen keeps turning off.', a: 'The app keeps the screen on during a live match. Low Power Mode on iPhone can override this, so turn it off for the match, or raise Auto-Lock in Settings.' },
+    { q: 'My screen keeps turning off.', a: 'The app keeps the screen on during a match. Low Power Mode on iPhone can override this, so turn it off for the match, or raise Auto-Lock in Settings.' },
+    { q: 'How do I get out of full screen on Android?', a: 'Swipe in from the edge to show the bars, or use your back gesture to leave full screen. It goes full screen again when you start or resume a match, and exits when the match ends.' },
     { q: 'Viewers say “scorer’s phone offline”.', a: 'Your phone hasn’t reached the internet for a couple of minutes. Scores still save on your phone and are sent when signal returns.' },
     { q: 'Golf: why did a player get par on a hole I didn’t touch?', a: 'When you move to the next hole, any score you didn’t change is saved as par, the grey number shown. Fix it on the <b>Card</b> by tapping that hole.' },
+    { q: 'Cricket: a batter was run out after taking runs.', a: 'A <b>Wicket</b> ball counts no runs, so runs completed before a run out aren’t added yet. The total will be short by those runs. This is a known gap.' },
     { q: 'Can two people score the same match?', a: 'Not yet. Only the phone that tapped <b>Go live</b> can update a live match.' },
     { q: 'How do I get the latest version?', a: 'When an update is ready, a green <b>New version available</b> bar appears. Tap it. The version number is at the bottom of every screen.' },
     { q: 'Is my data private?', a: 'Matches stay on your phone. A shared result link carries that match inside the link itself. Live matches pass through our live-score server and are deleted 30 days after the last update. There are no accounts or tracking.' },
@@ -2041,12 +2054,12 @@ function viewHelp() {
 
 const WELCOME = () => [
   { title: 'Welcome to Scorecard', body: isStandalone()
-    ? 'Keep score while you watch: rugby, football or your own sport. It works offline and keeps your screen on during a match.'
+    ? 'Keep score while you watch: rugby, football, cricket, golf, netball, hockey and more, or your own sport. It works offline and keeps your screen on during a match.'
     : isIOS()
       ? 'First, add it to your home screen so it works offline at the ground: tap <b>Share</b> in Safari, then <b>Add to Home Screen</b>, and open it from the icon.'
       : 'First, install it so it works offline at the ground: tap your browser’s <b>⋮</b> menu, then <b>Install app</b> or <b>Add to Home screen</b>.' },
-  { title: 'Scoring a match', body: 'Tap <b>New match</b>, set the teams and half length, then tap <b>Start clock</b> at kick-off. Tap a team’s button when they score. The app tells you when it’s half time.' },
-  { title: 'Help is always here', body: '<b>Help & FAQ</b> on the Home screen covers fixing mistakes, sharing results, live scores for people at home, and backups.' },
+  { title: 'Scoring a match', body: 'Tap <b>New match</b>, choose the sport, set the teams and half length, then tap <b>Start clock</b> at kick-off. Tap a team’s button when they score. The app tells you when it’s half time. Cricket and golf have their own simple screens.' },
+  { title: 'Help is always here', body: '<b>Help & FAQ</b> on the Home screen covers fixing mistakes, sharing and copying result links, live scores for people at home, and backups.' },
 ];
 
 function showWelcome(step = 0) {

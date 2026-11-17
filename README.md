@@ -75,3 +75,7 @@ cd live && npm install && npx wrangler dev --port 8787
 ```bash
 LIVE_API_URL=http://127.0.0.1:8787 node scripts/build.mjs && cd _site && python3 -m http.server 8000
 ```
+
+## Help & FAQ
+
+The in-app Help (`HELP` in `app.js`, also at `…/#/help`) must be updated with every change that affects how the app is used. The build fails if Help stops mentioning any feature in `HELP_TERMS` (`scripts/build.mjs`). See `CLAUDE.md`.

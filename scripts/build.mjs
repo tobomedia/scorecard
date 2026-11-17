@@ -61,6 +61,23 @@ const label = process.env.BUILD_NUMBER ? `${process.env.BUILD_NUMBER} (${content
 const liveApi = (process.env.LIVE_API_URL || '').trim().replace(/\/$/, '');
 if (liveApi && !/^https?:\/\/[\w.:-]+$/.test(liveApi)) throw new Error(`build: LIVE_API_URL looks wrong: ${liveApi}`);
 
+// Help & FAQ must keep up with the app: every feature people use has to be explained.
+// When you add or rename a feature, update HELP in app.js and add its button/label here.
+const HELP_TERMS = [
+  'New match', 'Start clock', 'Pause', 'Half time', 'Start 2nd half', 'End 1st half early', 'Full time',
+  'Undo', 'Log', 'Add missed event', 'Edit match', 'Share result', 'Copy link', 'Save to my history',
+  'Open a shared link', 'Go live', 'Copy live link', 'Back up', 'Restore', 'Time-up alerts', 'New sport',
+  'follow-up', 'Rugby League', 'Rugby Sevens', 'Penalty try', 'Netball', 'Cricket', 'Wide', 'No-ball', 'Bye',
+  'Start 2nd innings', 'Finish match', 'Golf courses', 'Quick round', 'Card', 'Edit round', 'full screen',
+  'New version available', 'Low Power Mode',
+];
+{
+  const src = read('app.js').toString();
+  const help = src.slice(src.indexOf('const HELP = {'), src.indexOf('function viewHelp'));
+  const missing = HELP_TERMS.filter((t) => !help.toLowerCase().includes(t.toLowerCase()));
+  if (missing.length) throw new Error(`build: Help & FAQ (HELP in app.js) doesn't mention: ${missing.join(', ')}`);
+}
+
 // 3. Rewrite references
 function rewrite(file, edits) {
   const p = join(out, file);
