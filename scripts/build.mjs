@@ -68,7 +68,7 @@ const HELP_TERMS = [
   'Undo', 'Log', 'Add missed event', 'Edit match', 'Share result', 'Copy link', 'Save to my history',
   'Open a shared link', 'Go live', 'Copy live link', 'Back up', 'Restore', 'Time-up alerts', 'New sport',
   'follow-up', 'Rugby League', 'Rugby Sevens', 'Penalty try', 'Netball', 'Cricket', 'Wide', 'No-ball', 'Bye',
-  'Start 2nd innings', 'Finish match', 'Golf courses', 'Quick round', 'Card', 'Edit round', 'full screen',
+  'Start 2nd innings', 'runs completed', 'run out', 'Finish match', 'Golf courses', 'Quick round', 'Card', 'Edit round', 'full screen',
   'New version available', 'Low Power Mode',
 ];
 {

@@ -733,3 +733,5 @@ dialog:focus { outline: none; }
 .cr-overs-list b { min-width: 2ch; text-align: right; }
 .cr-actions { grid-template-columns: 1fr 1fr; }
 .cr-key.extra { white-space: nowrap; font-size: 1.05rem; padding: 0 2px; }
+
+.cr-pick.four { grid-template-columns: repeat(4, 1fr); }

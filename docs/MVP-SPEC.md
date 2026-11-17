@@ -185,7 +185,7 @@ When you watch a match you lose track of the score breakdown, who scored when an
   - **Wide:** 1 run plus any extra runs (it asks), not a legal ball.
   - **No-ball:** 1 run plus runs off the bat (it asks), not a legal ball.
   - **Bye/leg-bye:** asks how many runs, and is a legal ball.
-  - **Wicket:** a legal ball with no runs.
+  - **Wicket:** asks for runs completed before it (default 0, or 1–3 for a run out after completed runs). It is one legal ball and shows as e.g. 1W.
   - **Undo** removes the last ball.
 - **Board:**
   - the batting team and score (e.g. 87/3), overs (12.4 of 20) and run rate

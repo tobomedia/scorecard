@@ -1065,7 +1065,7 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-/* cricket viewers: FOUR! / SIX! / WICKET! */
+/* cricket viewers: FOUR! / SIX! / WICKET! (a wicket can carry runs completed before a run out) */
 function announceBall(prev, m) {
   const before = innStats(prev, m.inningsIdx).balls.length;
   const balls = innStats(m, m.inningsIdx).balls;
@@ -1615,7 +1615,7 @@ viewCourse.after = () => {
    Limited overs, team score ball by ball. A match has kind 'cricket', overs and wickets per side,
    battingFirst ('home'|'away'), innings: [{ balls: [{ k, r }] }] and inningsIdx.
    Ball kinds: run (r off the bat), wd (wide: 1 + r, re-bowled), nb (no-ball: 1 + r, re-bowled),
-   b (bye/leg-bye: r, legal), w (wicket, legal, no runs). */
+   b (bye/leg-bye: r, legal), w (wicket, legal; r = runs completed before a run out, usually 0). */
 const isCricket = (m) => !!m && (m.kind === 'cricket' || m.sport?.kind === 'cricket');
 const ballRuns = (b) => (b.k === 'wd' || b.k === 'nb' ? 1 : 0) + (b.r || 0);
 const isLegal = (b) => b.k !== 'wd' && b.k !== 'nb';
@@ -1649,7 +1649,7 @@ function cricketResult(m) {
 }
 
 function ballLabel(b) {
-  if (b.k === 'w') return 'W';
+  if (b.k === 'w') return b.r ? `${b.r}W` : 'W';
   if (b.k === 'wd') return b.r ? `${b.r + 1}wd` : 'wd';
   if (b.k === 'nb') return b.r ? `nb${b.r}` : 'nb';
   if (b.k === 'b') return `${b.r}b`;
@@ -1739,7 +1739,7 @@ function viewCricket(m) {
   const pad = `
     <div class="cr-pad">
       ${[0, 1, 2, 3, 4, 6].map((r) => `<button class="cr-key ${r >= 4 ? 'bdry' : ''}" data-action="cr-ball" data-k="run" data-r="${r}">${r === 0 ? '·<small>dot</small>' : r}</button>`).join('')}
-      <button class="cr-key wkt" data-action="cr-ball" data-k="w">Wicket</button>
+      <button class="cr-key wkt" data-action="cr-extra" data-k="w">Wicket</button>
       <button class="cr-key extra" data-action="cr-extra" data-k="wd">Wide</button>
       <button class="cr-key extra" data-action="cr-extra" data-k="nb">No-ball</button>
       <button class="cr-key extra" data-action="cr-extra" data-k="b">Bye</button>
@@ -1770,12 +1770,15 @@ function cricketOversList(m, i, limit) {
 
 /* asks how many runs for an extra, then records it */
 function cricketExtra(k) {
-  const opts = { wd: [0, 1, 2, 3, 4], nb: [0, 1, 2, 3, 4, 6], b: [1, 2, 3, 4] }[k];
-  const title = { wd: 'Wide', nb: 'No-ball', b: 'Byes' }[k];
-  const help = { wd: '1 run for the wide. Any extra runs run?', nb: '1 run for the no-ball. Runs off the bat?', b: 'How many byes / leg-byes?' }[k];
+  const opts = { wd: [0, 1, 2, 3, 4], nb: [0, 1, 2, 3, 4, 6], b: [1, 2, 3, 4], w: [0, 1, 2, 3] }[k];
+  const title = { wd: 'Wide', nb: 'No-ball', b: 'Byes', w: 'Wicket' }[k];
+  const help = {
+    wd: '1 run for the wide. Any extra runs run?', nb: '1 run for the no-ball. Runs off the bat?', b: 'How many byes / leg-byes?',
+    w: 'Runs completed before the wicket? Usually 0. More only for a run out after they’d already run.',
+  }[k];
   openModal(`
     <h2>${title}</h2><p class="muted">${help}</p>
-    <div class="cr-pick">${opts.map((r) => `<button class="${k === 'b' && r === 1 || k !== 'b' && r === 0 ? 'btn-primary' : ''}" data-modal="${r}">${k === 'b' ? r : `+${r}`}</button>`).join('')}</div>`,
+    <div class="cr-pick${k === 'w' ? ' four' : ''}">${opts.map((r) => `<button class="${k === 'b' && r === 1 || k !== 'b' && r === 0 ? 'btn-primary' : ''}" data-modal="${r}">${k === 'b' || k === 'w' ? r : `+${r}`}</button>`).join('')}</div>`,
   (res) => { const r = Number(res); if (Number.isFinite(r) && res !== 'dismiss') cricketBall(k, r); });
 }
 
@@ -1873,7 +1876,7 @@ async function finishCricket(early) {
 /* compact form for links and live sharing: balls as short codes */
 const BALL_CODE = { run: '', wd: 'w', nb: 'n', b: 'b' };
 function packCricket(m) {
-  const enc = (b) => (b.k === 'w' ? 'W' : `${BALL_CODE[b.k]}${b.r || 0}`);
+  const enc = (b) => (b.k === 'w' ? `W${b.r || ''}` : `${BALL_CODE[b.k]}${b.r || 0}`);
   return {
     v: 1, k: 'cricket', id: m.id, d: m.startedAt, h: m.home, a: m.away, o: m.overs, wk: m.wickets,
     bf: m.battingFirst === 'away' ? 1 : 0, ii: m.inningsIdx, i: m.innings.map((inn) => inn.balls.map(enc).join(',')),
@@ -1881,7 +1884,7 @@ function packCricket(m) {
 }
 function unpackCricket(o) {
   const dec = (c) => {
-    if (c === 'W') return { k: 'w', r: 0 };
+    if (c[0] === 'W') return { k: 'w', r: Number(c.slice(1)) || 0 };
     const k = { w: 'wd', n: 'nb', b: 'b' }[c[0]] || 'run';
     return { k, r: Number(k === 'run' ? c : c.slice(1)) || 0 };
   };
@@ -1991,6 +1994,7 @@ const HELP = {
     { id: 'cricket', title: 'Cricket', body: [
       '<b>New match → Cricket</b>: team names, overs per side, wickets and who bats first.',
       'Tap a button for every ball: <b>· (dot) 1 2 3 4 6</b> or <b>Wicket</b>. <b>Wide</b> and <b>No-ball</b> add 1 run, ask for any extra runs, and are re-bowled. <b>Bye</b> asks how many byes or leg-byes.',
+      '<b>Wicket</b> asks for <b>runs completed</b> before the wicket. Tap <b>0</b> for most wickets (bowled, caught). Choose 1–3 for a <b>run out</b> where the batters had already completed runs. It shows as e.g. <b>1W</b>.',
       'The board shows the score (e.g. 87/3), overs, run rate and this over, with the last few overs below. In the chase it shows the target and <b>need X off Y balls</b>.',
       'The innings ends by itself when the overs run out or the side is all out. Tap <b>Start 2nd innings</b>. The match ends when the target is reached or the overs run out, with the result worked out for you. Tap <b>Finish match</b> to save it.',
       '<b>Undo</b> removes the last ball. At the start of the 2nd innings it takes you back to the 1st. <b>End</b> stops a match early, e.g. for rain. <b>Edit</b> changes team names, overs, wickets or date.',
@@ -2019,7 +2023,8 @@ const HELP = {
     { q: 'How do I get out of full screen on Android?', a: 'Swipe in from the edge to show the bars, or use your back gesture to leave full screen. It goes full screen again when you start or resume a match, and exits when the match ends.' },
     { q: 'Viewers say “scorer’s phone offline”.', a: 'Your phone hasn’t reached the internet for a couple of minutes. Scores still save on your phone and are sent when signal returns.' },
     { q: 'Golf: why did a player get par on a hole I didn’t touch?', a: 'When you move to the next hole, any score you didn’t change is saved as par, the grey number shown. Fix it on the <b>Card</b> by tapping that hole.' },
-    { q: 'Cricket: a batter was run out after taking runs.', a: 'A <b>Wicket</b> ball counts no runs, so runs completed before a run out aren’t added yet. The total will be short by those runs. This is a known gap.' },
+    { q: 'Cricket: a batter was run out after taking runs.', a: 'Tap <b>Wicket</b>, then the number of <b>runs completed</b> before the run out (e.g. 1). Those runs and the wicket count as one ball. For a normal wicket, tap 0.' },
+    { q: 'Cricket: what is a run out?', a: 'Batters score by running between the two ends. If a fielder breaks the stumps while a batter is still short of the end, that batter is <b>run out</b>. Any runs they finished before that still count.' },
     { q: 'Can two people score the same match?', a: 'Not yet. Only the phone that tapped <b>Go live</b> can update a live match.' },
     { q: 'How do I get the latest version?', a: 'When an update is ready, a green <b>New version available</b> bar appears. Tap it. The version number is at the bottom of every screen.' },
     { q: 'Is my data private?', a: 'Matches stay on your phone. A shared result link carries that match inside the link itself. Live matches pass through our live-score server and are deleted 30 days after the last update. There are no accounts or tracking.' },
